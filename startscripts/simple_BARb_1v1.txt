@@ -1,0 +1,86 @@
+[Game]
+{
+	[allyTeam0]
+	{
+		startrectright = 0.2;
+		startrectbottom = 1;
+		startrectleft = 0;
+		numallies = 0;
+		startrecttop = 0;
+	}
+
+	[allyTeam1]
+	{
+		startrectright = 1;
+		startrectbottom = 1;
+		startrectleft = 0.80000001;
+		numallies = 0;
+		startrecttop = 0;
+	}
+
+	[team0]
+	{
+		Side = Cortex;
+		Handicap = 0;
+		RgbColor = 0.99609375 0.546875 0;
+		AllyTeam = 0;
+		TeamLeader = 0;
+	}
+
+	[team1]
+	{
+		Side = Cortex;
+		Handicap = 0;
+		RgbColor = 0.99609375 0.546875 0;
+		AllyTeam = 1;
+		TeamLeader = 0;
+	}
+	
+
+	[ai0]
+	{
+		Host = 0;
+		IsFromDemo = 0;
+		Name = "BARbarianAI";
+		ShortName = "BARb";
+		Team = 0;
+		Version = stable;
+	}
+	
+	[ai1]
+	{
+		Host = 0;
+		IsFromDemo = 0;
+		Name = "BARbarianAI2";
+		ShortName = "BARb";
+		Team = 1;
+		Version = stable;
+	}
+
+	[modoptions]
+	{
+		minSpeed = 10000;
+		maxSpeed = 100000;
+	}
+
+	[player0]
+	{
+		IsFromDemo = 0;
+		Name = [teh]Beherith;
+		Team = 0;
+		Spectator = 1;
+		rank = 0;
+	}
+
+	hostip = 127.0.0.1;
+	hostport = 0;
+	numplayers = 1;
+	startpostype = 2;
+	mapname = Iron_Isle_V1;
+	ishost = 1;
+	numusers = 5;
+	gametype = BAR;
+	GameStartDelay = 5;
+	nohelperais = 0;
+	myplayername = [teh]Beherith;
+}
