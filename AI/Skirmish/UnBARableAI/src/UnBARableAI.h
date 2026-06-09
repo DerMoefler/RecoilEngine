@@ -1,13 +1,13 @@
-#ifndef SIMPLEAI_H
-#define SIMPLEAI_H
+#ifndef UNBARABLEAI_H
+#define UNBARABLEAI_H
 
 #include "OOAICallback.h"
 #include <vector>
 
-class CSimpleAI {
+class UnBARableAI {
 public:
-	CSimpleAI(springai::OOAICallback* callback);
-	~CSimpleAI();
+	UnBARableAI(springai::OOAICallback* callback);
+	~UnBARableAI();
 
 	void HandleEvent(int topic, const void* data);
 
@@ -18,4 +18,4 @@ private:
 	bool comInUse_ = true;
 };
 
-#endif // SIMPLEAI_H
+#endif // UNBARABLEAI_H

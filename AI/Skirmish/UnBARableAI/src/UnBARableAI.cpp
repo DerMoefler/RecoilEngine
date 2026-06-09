@@ -1,4 +1,4 @@
-#include "SimpleAI.h"
+#include "UnBARableAI.h"
 #include "ExternalAI/Interface/AISEvents.h"
 #include "Economy.h"
 #include "Resource.h"
@@ -10,21 +10,21 @@
 #include <cstdlib>
 #include <ctime>
 
-CSimpleAI::CSimpleAI(springai::OOAICallback* callback) : callback_(callback) {
+UnBARableAI::UnBARableAI(springai::OOAICallback* callback) : callback_(callback) {
 	teamId_ = callback_->GetSkirmishAIId();
 	srand(time(NULL));
-	std::cout << "SimpleBARAI initialized for team " << teamId_ << std::endl;
+	std::cout << "UnBARableAI initialized for team " << teamId_ << std::endl;
 }
 
-CSimpleAI::~CSimpleAI() {
+UnBARableAI::~UnBARableAI() {
 	// Cleanup if needed
 }
 
-void CSimpleAI::HandleEvent(int topic, const void* data) {
+void UnBARableAI::HandleEvent(int topic, const void* data) {
 	switch (topic) {
 		case EVENT_INIT: {
 			// Initialization event
-			std::cout << "MGKIPYoAI received INIT event" << std::endl;
+			std::cout << "UnBARableAI received INIT event" << std::endl;
 			break;
 		}
 		case EVENT_UNIT_CREATED: {

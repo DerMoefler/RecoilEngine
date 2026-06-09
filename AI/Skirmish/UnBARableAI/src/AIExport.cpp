@@ -7,12 +7,12 @@
 #include "OOAICallback.h"
 #include "WrappOOAICallback.h"
 
-#include "SimpleAI.h"
+#include "UnBARableAI.h"
 
 #include <stdexcept>
 #include <map>
 
-static std::map<int, CSimpleAI*> myAIs;
+static std::map<int, UnBARableAI*> myAIs;
 static std::map<int, springai::OOAICallback*> myAICallbacks;
 
 const static int ERROR_SHIFT = 100;
@@ -36,7 +36,7 @@ EXPORT(int) init(int skirmishAIId, const struct SSkirmishAICallback* innerCallba
 
 	try {
 		springai::OOAICallback* clb = springai::WrappOOAICallback::GetInstance(innerCallback, skirmishAIId);
-		CSimpleAI* ai = new CSimpleAI(clb);
+		UnBARableAI* ai = new UnBARableAI(clb);
 
 		myAIs[skirmishAIId] = ai;
 		myAICallbacks[skirmishAIId] = clb;
