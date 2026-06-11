@@ -6,11 +6,16 @@
 #include "UnitDef.h"
 #include "WrappUnit.h"
 #include "Map.h"
+#include "unit_data/unit_data.h"
+#include "engine_bridge/engine_bridge.h"
 #include <iostream>
 #include <cstdlib>
 #include <ctime>
 
-UnBARableAI::UnBARableAI(springai::OOAICallback* callback) : callback_(callback) {
+UnBARableAI::UnBARableAI(springai::OOAICallback* callback) : 
+	callback_(callback), 
+	engineBridge_(UnBARableAINS::EngineBridge()) 
+{
 	teamId_ = callback_->GetSkirmishAIId();
 	srand(time(NULL));
 	std::cout << "UnBARableAI initialized for team " << teamId_ << std::endl;
@@ -50,6 +55,13 @@ void UnBARableAI::HandleEvent(int topic, const void* data) {
 		case EVENT_UPDATE: {
 			const SUpdateEvent* event = static_cast<const SUpdateEvent*>(data);
 			if (event->frame % 30 == 0) {
+				for (springai::Unit* unit : callback_->GetFriendlyUnits()){
+					UnBARableAINS::unit::UnitData unitData{
+						unit->GetHealth(),
+						// #TODO: fill unitdata with more info
+					};
+					engineBridge_.writeUnitDataInMemory(unitData);
+				}
 				
 			}
 			

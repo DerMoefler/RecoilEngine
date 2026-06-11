@@ -3,6 +3,7 @@
 
 #include "OOAICallback.h"
 #include <vector>
+#include "engine_bridge/engine_bridge.h"
 
 class UnBARableAI {
 public:
@@ -16,6 +17,7 @@ private:
 	std::vector<int> myUnits_;
 	int teamId_;
 	bool comInUse_ = true;
+	UnBARableAINS::EngineBridge engineBridge_;
 };
 
 #endif // UNBARABLEAI_H
