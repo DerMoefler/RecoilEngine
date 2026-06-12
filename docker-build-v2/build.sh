@@ -136,18 +136,20 @@ fi
 
 # Support running directly from Windows without WSL layer: we need to pass real
 # native Windows path to docker.
+# CPP_ROOTso the docker build can find our cpp code.
 if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" ]]; then
   CWD="$(cygpath -w -a .)"
   P="\\"
 else
   CWD="$(pwd)"
-  CPP_ROOT="$(readlink -f ../cpp)" # so the docker build can find our cpp code.
+  CPP_ROOT="$(readlink -f ../cpp)"
   P="/"
 fi
 
 # Handle git worktrees: the container needs access to the shared .git directory
 # for version generation. In a worktree, --absolute-git-dir returns the
 # worktree-specific dir while --git-common-dir returns the shared .git root.
+# CPP_ROOT so the docker build can find our cpp code.
 WORKTREE_MOUNTS=""
 GIT_DIR=$(git rev-parse --absolute-git-dir)
 GIT_COMMON_DIR=$(git rev-parse --path-format=absolute --git-common-dir)
@@ -157,7 +159,7 @@ fi
 
 $RUNTIME run --platform=linux/$ARCH -it --rm \
     -v "$CWD${P}":/build/src:z,ro \
-    -v "$CPP_ROOT":/build/cpp:z,ro \    # so the docker build can find our cpp code.
+    -v "$CPP_ROOT":/build/cpp:z,ro \
     -v "$CWD${P}.cache${P}ccache-$PLATFORM":/build/cache:z,rw \
     -v "$CWD${P}build-$PLATFORM":/build/out:z,rw \
     $UID_FLAGS \
