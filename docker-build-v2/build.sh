@@ -141,7 +141,7 @@ if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" ]]; then
   P="\\"
 else
   CWD="$(pwd)"
-  CPP_ROOT="$(readlink -f ../cpp)"
+  CPP_ROOT="$(readlink -f ../cpp)" # so the docker build can find our cpp code.
   P="/"
 fi
 
@@ -157,7 +157,7 @@ fi
 
 $RUNTIME run --platform=linux/$ARCH -it --rm \
     -v "$CWD${P}":/build/src:z,ro \
-    -v "$CPP_ROOT":/build/cpp:z,ro \
+    -v "$CPP_ROOT":/build/cpp:z,ro \    # so the docker build can find our cpp code.
     -v "$CWD${P}.cache${P}ccache-$PLATFORM":/build/cache:z,rw \
     -v "$CWD${P}build-$PLATFORM":/build/out:z,rw \
     $UID_FLAGS \

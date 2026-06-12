@@ -153,3 +153,7 @@ To sum up, there is a separation:
 - Post build scripts: platform agnostic scripts:
   - `docker-build-v2/scripts/split-debug-info.sh`: Splits debug information from binaries
   - `docker-build-v2/scripts/package.sh`: Creates 2 archives, one with engine and one with debug symbols.
+
+
+## Changes so the docker script finds the our cpp folder
+see comments in build.sh
