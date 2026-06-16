@@ -157,13 +157,25 @@ if [[ "$GIT_DIR" != "$GIT_COMMON_DIR" ]]; then
   WORKTREE_MOUNTS="-v $GIT_COMMON_DIR:$GIT_COMMON_DIR:ro"
 fi
 
+# Handle git submodules: when RecoilEngine is itself checked out as a submodule,
+# its .git is only a pointer to the superproject's .git/modules/RecoilEngine.
+# Inside the container, /build/src/../.git must therefore exist as /build/.git.
+SUBMODULE_MOUNTS=""
+if [[ -f .git && "$GIT_DIR" == */.git/modules/* ]]; then
+  SUPERPROJECT_DOT_GIT="${GIT_DIR%%/modules/*}"
+  SUBMODULE_MOUNTS="-v $SUPERPROJECT_DOT_GIT:/build/.git:ro"
+fi
+
+
 $RUNTIME run --platform=linux/$ARCH -it --rm \
     -v "$CWD${P}":/build/src:z,ro \
+    -v "$CWD${P}":/build/RecoilEngine:z,ro \
     -v "$CPP_ROOT":/build/cpp:z,ro \
     -v "$CWD${P}.cache${P}ccache-$PLATFORM":/build/cache:z,rw \
     -v "$CWD${P}build-$PLATFORM":/build/out:z,rw \
     $UID_FLAGS \
     $WORKTREE_MOUNTS \
+    $SUBMODULE_MOUNTS \
     -e CONFIGURE \
     -e COMPILE \
     -e CMAKE_BUILD_PARALLEL_LEVEL \

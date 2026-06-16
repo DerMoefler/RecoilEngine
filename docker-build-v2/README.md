@@ -157,3 +157,8 @@ To sum up, there is a separation:
 
 ## Changes so the docker script finds the our cpp folder
 see comments in build.sh
+
+## Changes so the docker script finds the .git folder
+- The parent repository’s .git folder was mounted into the container at /build/.git. 
+- This allows Git to access the submodule metadata located in .git/modules/RecoilEngine.
+- in SUBMODULE_MOUNTS="" and $RUNTIME run --platform=linux/$ARCH -it --rm \
