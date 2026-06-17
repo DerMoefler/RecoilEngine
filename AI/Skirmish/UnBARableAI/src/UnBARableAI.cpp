@@ -8,6 +8,7 @@
 #include "Map.h"
 #include "unit_data/unit_data.h"
 #include "engine_bridge/engine_bridge.h"
+#include "grpc_client/UnBARableAIClient.h"
 #include <iostream>
 #include <cstdlib>
 #include <ctime>
@@ -54,13 +55,19 @@ void UnBARableAI::HandleEvent(int topic, const void* data) {
 		}
 		case EVENT_UPDATE: {
 			const SUpdateEvent* event = static_cast<const SUpdateEvent*>(data);
-			if (event->frame % 30 == 0) {
+			if (event->frame % 230 == 0) {
 				for (springai::Unit* unit : callback_->GetFriendlyUnits()){
 					UnBARableAINS::unit::UnitData unitData{
 						unit->GetHealth(),
 						// #TODO: fill unitdata with more info
 					};
 					engineBridge_.writeUnitDataInMemory(unitData);
+					UnBARableAIClient client = UnBARableAIClient();
+					if (!client.HandleEventUpdate()) {
+						std::cerr << "Failed to send event update: " << client.GetLastError() << std::endl;
+					} else {
+						std::cout << "Event update sent successfully" << std::endl;
+					}
 				}
 				
 			}

@@ -41,8 +41,8 @@
 	{
 		Host = 0;
 		IsFromDemo = 0;
-		Name = "SimpleBARAI";
-		ShortName = "SimBAR";
+		Name = "UnBARableAI";
+		ShortName = "UnBARableAI";
 		Team = 0;
 		Version = stable;
 	}
