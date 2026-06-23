@@ -35,6 +35,11 @@ find_package_static(OpenGL 3.0 REQUIRED)
 list(APPEND engineLibraries OpenGL::GL)
 
 find_fontconfig_hack()
+
+find_library(UUID_LIB uuid REQUIRED)
+find_library(BROTLI_DEC_LIB brotlidec REQUIRED)
+find_library(BROTLI_COMMON_LIB brotlicommon REQUIRED)
+
 find_package_static(Fontconfig 2.11 REQUIRED)
 list(APPEND engineLibraries Fontconfig::Fontconfig)
 add_definitions(-DUSE_FONTCONFIG)
@@ -72,6 +77,12 @@ list(APPEND engineLibraries RmlUi::Core)
 list(APPEND engineLibraries RmlUi::Debugger)
 list(APPEND engineLibraries lunasvg)
 list(APPEND engineLibraries glad)
+# Zusatzlibs für statischen Link
+list(APPEND engineLibraries
+    ${UUID_LIB}
+    ${BROTLI_DEC_LIB}
+    ${BROTLI_COMMON_LIB}
+)
 
 ### Assemble external include dirs
 list(APPEND engineIncludes ${ENGINE_SRC_ROOT_DIR}/lib/asio/include)
@@ -82,7 +93,16 @@ include_directories(${engineIncludes})
 
 ### Build the executable
 add_executable(engine-legacy ${EXE_FLAGS} ${engineSources} ${ENGINE_ICON} ${engineHeaders})
-target_link_libraries(engine-legacy ${engineLibraries} Game)
+
+target_sources(engine-legacy PRIVATE
+    ${CMAKE_SOURCE_DIR}/rts/System/Platform/Linux/MathFiniteCompat.c
+)
+
+target_link_libraries(engine-legacy PRIVATE    
+	${engineLibraries}    
+	Game
+)
+
 
 # Export symbols for plugin access (replaces CMP0065 OLD behavior)
 set_target_properties(engine-legacy PROPERTIES ENABLE_EXPORTS TRUE)

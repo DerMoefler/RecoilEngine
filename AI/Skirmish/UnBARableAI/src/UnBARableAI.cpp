@@ -6,16 +6,13 @@
 #include "UnitDef.h"
 #include "WrappUnit.h"
 #include "Map.h"
-#include "unit_data/unit_data.h"
-#include "engine_bridge/engine_bridge.h"
-#include "grpc_client/UnBARableAIClient.h"
+#include "UnBARableAI/UnBARableAIClient.h"
 #include <iostream>
 #include <cstdlib>
 #include <ctime>
 
 UnBARableAI::UnBARableAI(springai::OOAICallback* callback) : 
-	callback_(callback), 
-	engineBridge_(UnBARableAINS::EngineBridge()) 
+	callback_(callback)
 {
 	teamId_ = callback_->GetSkirmishAIId();
 	srand(time(NULL));
@@ -57,11 +54,6 @@ void UnBARableAI::HandleEvent(int topic, const void* data) {
 			const SUpdateEvent* event = static_cast<const SUpdateEvent*>(data);
 			if (event->frame % 230 == 0) {
 				for (springai::Unit* unit : callback_->GetFriendlyUnits()){
-					UnBARableAINS::unit::UnitData unitData{
-						unit->GetHealth(),
-						// #TODO: fill unitdata with more info
-					};
-					engineBridge_.writeUnitDataInMemory(unitData);
 					UnBARableAIClient client = UnBARableAIClient();
 					if (!client.HandleEventUpdate()) {
 						std::cerr << "Failed to send event update: " << client.GetLastError() << std::endl;

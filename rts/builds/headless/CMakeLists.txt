@@ -14,6 +14,8 @@ remove_definitions(-DAVI_CAPTURING)
 set(OpenGL_GL_PREFERENCE LEGACY)
 
 find_package(OpenGL 3.0 REQUIRED)
+find_library(BROTLI_DEC_LIB brotlidec REQUIRED)
+find_library(BROTLI_COMMON_LIB brotlicommon REQUIRED)
 
 # NOTE(create_headless_target): We don't need to copy COMPILE_DEFINTIONS till the add_definitions are used.
 # We don't need to copy COMPILE_DEFINTIONS because the headless defines are defined at the folder level
@@ -44,6 +46,9 @@ list(APPEND engineHeadlessLibraries pr-downloader)
 list(APPEND engineHeadlessLibraries RmlUi::Core)
 list(APPEND engineHeadlessLibraries RmlUi::Debugger)
 list(APPEND engineHeadlessLibraries lunasvg)
+list(APPEND engineHeadlessLibraries ${BROTLI_DEC_LIB}
+    ${BROTLI_COMMON_LIB}
+)
 
 include_directories(${ENGINE_SRC_ROOT_DIR}/lib/assimp/include)
 include_directories(${ENGINE_SRC_ROOT_DIR}/lib/asio/include)

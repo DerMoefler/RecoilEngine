@@ -1,22 +1,28 @@
 # We pick ubuntu 18 instead of newer one because we are dynamically linking
 # to glibc and a few other libraries and we want to keep compatibility for as
 # many users as possible.
-FROM docker.io/ubuntu:18.04
+FROM docker.io/ubuntu:22.04
 ARG ENGINE_PLATFORM
 ARG STATIC_LIBS_BRANCH
 ENV ENGINE_PLATFORM=${ENGINE_PLATFORM}
 
+ENV DEBIAN_FRONTEND=noninteractive
+
 RUN apt-get update \
- && apt-get install --no-install-recommends --yes software-properties-common \
+ && apt-get install --no-install-recommends --yes \
+    software-properties-common \
+    gnupg \
+    gpg-agent \
+    ca-certificates \
  && add-apt-repository ppa:ubuntu-toolchain-r/test --yes \
  && apt-get update \
  && apt-get install --no-install-recommends --yes \
-    curl gcc-13 g++-13 git ninja-build curl p7zip-full python3-pip python3-setuptools \
+    build-essential \
+    curl gcc-13 g++-13 git ninja-build p7zip-full xz-utils python3-pip python3-setuptools \
     libsdl2-dev libopenal-dev libfreetype6-dev libfontconfig1-dev \
  && apt-get remove --purge --yes software-properties-common \
- && apt-get autoremove --purge --yes \
- && apt-get upgrade --yes \
  && rm -rf /var/lib/apt/lists/*
+
 
 # We need a newer ccache for compression support.
 ARG CCACHE_VERSION="4.13.1"
@@ -37,7 +43,8 @@ RUN git clone --depth 1 --branch v1.5.7 https://github.com/facebook/zstd.git \
 
 RUN pip3 install --upgrade pip \
  && pip3 install scikit-build \
- && pip3 install cmake==3.27.*
+ && pip3 install cmake==3.27.* \
+ && pip3 install "conan>=2,<3"
 
 WORKDIR /build
 RUN mkdir src cache out artifacts && chmod a+rwx cache out artifacts
