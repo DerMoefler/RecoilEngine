@@ -134,9 +134,6 @@ if [[ -n "${CONTAINER_RUNTIME_EXTRA_ARGS:-}" ]]; then
   eval "EXTRA_ARGS=($CONTAINER_RUNTIME_EXTRA_ARGS)"
 fi
 
-if [[ -d "$HOME/.conan2" ]]; then
-  CONAN_CACHE_MOUNT="-v $HOME/.conan2:$HOME/.conan2:z,rw"
-fi
 
 # Support running directly from Windows without WSL layer: we need to pass real
 # native Windows path to docker.
@@ -177,7 +174,6 @@ $RUNTIME run --platform=linux/$ARCH -it --rm \
     -v "$CPP_ROOT":/build/cpp:z,ro \
     -v "$CWD${P}.cache${P}ccache-$PLATFORM":/build/cache:z,rw \
     -v "$CWD${P}build-$PLATFORM":/build/out:z,rw \
-    $CONAN_CACHE_MOUNT \
     $UID_FLAGS \
     $WORKTREE_MOUNTS \
     $SUBMODULE_MOUNTS \
@@ -203,21 +199,32 @@ if [[ "$(id -u)" != "$(stat -c %u /build/src)" ]]; then
   exit 1
 fi
 
+# Build cpp core INSIDE the container so it uses the same glibc/toolchain
+# as the engine build. Conan is also container-local for reproducibility.
+export CONAN_HOME=/build/out/conan2
+mkdir -p "$CONAN_HOME"
+
 cd /build/cpp
+
+# Conan 2 setup inside the container
+conan profile detect --force
+
+conan install . \
+  --output-folder /build/out/cpp/Release \
+  --build=missing \
+  -s build_type=Release
 
 cmake -S /build/cpp \
   -B /build/out/cpp/Release \
   -DCMAKE_BUILD_TYPE=Release \
-  -DCMAKE_PREFIX_PATH=/build/cpp/build/Release/generators \
-  -DCMAKE_MODULE_PATH=/build/cpp/build/Release/generators \
+  -DCMAKE_TOOLCHAIN_FILE=/build/out/cpp/Release/build/Release/generators/conan_toolchain.cmake \
   -DUNBARABLEAI_BUILD_PYTHON=OFF \
   -DUNBARABLEAI_BUILD_TESTS=OFF
-  
+
 cmake --build /build/out/cpp/Release
 
 cmake --install /build/out/cpp/Release \
   --prefix /build/out/cpp/install
-
 cd /build/src/docker-build-v2/scripts
 $CONFIGURE && ./configure.sh "$@"
 if $COMPILE; then

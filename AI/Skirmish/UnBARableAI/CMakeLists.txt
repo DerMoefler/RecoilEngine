@@ -14,7 +14,7 @@ message(STATUS "CONTAINER_LIBC_SINGLE=${_libc_single_out}")
 
 ### UnBARableAI config
 list(PREPEND CMAKE_PREFIX_PATH "/build/out/cpp/install")
-list(PREPEND CMAKE_PREFIX_PATH "/build/cpp/build/Release/generators")
+list(PREPEND CMAKE_PREFIX_PATH "/build/out/cpp/Release/build/Release/generators")
 
 
 # Mappe den Engine-Buildtype RelWithDebInfo auf die Release-Artefakte

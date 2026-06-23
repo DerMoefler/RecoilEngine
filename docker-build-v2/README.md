@@ -162,3 +162,13 @@ see comments in build.sh
 - The parent repository’s .git folder was mounted into the container at /build/.git. 
 - This allows Git to access the submodule metadata located in .git/modules/RecoilEngine.
 - in SUBMODULE_MOUNTS="" and $RUNTIME run --platform=linux/$ARCH -it --rm \
+
+## Command to build the image
+```console
+docker-build-v2/images/amd64-linux/build.sh
+```
+
+## command to build engine
+```console
+CONTAINER_IMAGE=localhost/recoil-build-amd64-linux:latest docker-build-v2/build.sh linux
+```
