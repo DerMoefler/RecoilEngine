@@ -55,11 +55,13 @@ void UnBARableAI::HandleEvent(int topic, const void* data) {
 			if (event->frame % 230 == 0) {
 				for (springai::Unit* unit : callback_->GetFriendlyUnits()){
 					UnBARableAIClient client = UnBARableAIClient();
+					// TODO: Observation in shared memory schreiben
 					if (!client.HandleEventUpdate()) {
 						std::cerr << "Failed to send event update: " << client.GetLastError() << std::endl;
 					} else {
 						std::cout << "Event update sent successfully" << std::endl;
 					}
+					// TODO: Action aus shared memory auslesen und ausführen
 				}
 				
 			}
