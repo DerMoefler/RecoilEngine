@@ -55,6 +55,25 @@ void UnBARableAI::HandleEvent(int topic, const void* data) {
 			if (event->frame % 230 == 0) {
 				for (springai::Unit* unit : callback_->GetFriendlyUnits()){
 					UnBARableAIClient client = UnBARableAIClient();
+					int unitId = unit->GetUnitId();
+					int unitDefId = unit->GetDef()->GetUnitDefId();
+					std::string unitName = unit->GetDef()->GetName();
+					std::string humanName = unit->GetDef()->GetHumanName();
+					int teamId = unit->GetTeam();
+					int allyTeamId = unit->GetAllyTeam();
+					float health = unit->GetHealth();
+					float maxHealth = unit->GetMaxHealth();
+					float posX = unit->GetPos().x;
+					float posY = unit->GetPos().y;
+					float posZ = unit->GetPos().z;
+					float losRadius = unit->GetDef()->GetLosRadius();
+					float airLosRadius = unit->GetDef()->GetAirLosRadius();
+					bool isDead = (health <= 0.0f);
+					bool beingBuilt = (unit->GetBuildProgress() < 1.0f);
+					float buildProgress = unit->GetBuildProgress();
+					float captureProgress = unit->GetCaptureProgress();
+					float paralyzeDamage = unit->GetParalyzeDamage();
+					std::cout << unitId << unitName << humanName << teamId << allyTeamId << health << maxHealth <<  posX << posY << posZ << "), LOS Radius: " << losRadius << ", Air LOS Radius: " << airLosRadius << ", Is Dead: " << isDead << ", Being Built: " << beingBuilt << ", Build Progress: " << buildProgress << ", Capture Progress: " << captureProgress << ", Paralyze Damage: " << paralyzeDamage << std::endl;
 					// TODO: Observation in shared memory schreiben
 					if (!client.HandleEventUpdate()) {
 						std::cerr << "Failed to send event update: " << client.GetLastError() << std::endl;
