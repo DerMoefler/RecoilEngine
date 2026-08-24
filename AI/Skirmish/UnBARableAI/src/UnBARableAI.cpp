@@ -54,7 +54,6 @@ void UnBARableAI::HandleEvent(int topic, const void* data) {
 			const SUpdateEvent* event = static_cast<const SUpdateEvent*>(data);
 			if (event->frame % 230 == 0) {
 				for (springai::Unit* unit : callback_->GetFriendlyUnits()){
-					UnBARableAIClient client = UnBARableAIClient();
 					int unitId = unit->GetUnitId();
 					int unitDefId = unit->GetDef()->GetUnitDefId();
 					std::string unitName = unit->GetDef()->GetName();
@@ -75,13 +74,56 @@ void UnBARableAI::HandleEvent(int topic, const void* data) {
 					float paralyzeDamage = unit->GetParalyzeDamage();
 					std::cout << unitId << unitName << humanName << teamId << allyTeamId << health << maxHealth <<  posX << posY << posZ << "), LOS Radius: " << losRadius << ", Air LOS Radius: " << airLosRadius << ", Is Dead: " << isDead << ", Being Built: " << beingBuilt << ", Build Progress: " << buildProgress << ", Capture Progress: " << captureProgress << ", Paralyze Damage: " << paralyzeDamage << std::endl;
 					// TODO: Observation in shared memory schreiben
-					if (!client.HandleEventUpdate()) {
+				}
+				UnBARableAIClient client = UnBARableAIClient();
+				if (!client.HandleEventUpdate()) {
 						std::cerr << "Failed to send event update: " << client.GetLastError() << std::endl;
 					} else {
 						std::cout << "Event update sent successfully" << std::endl;
 					}
-					// TODO: Action aus shared memory auslesen und ausführen
+				// TODO: Action aus shared memory auslesen
+				for (int i = 0; i < 5; ++i) {
+					int unitId = 2; // TODO: Replace with actual unit ID from action
+					springai::Unit* unit = springai::WrappUnit::GetInstance(teamId_, unitId);
+					int actionId = 1; // TODO: Replace with actual action ID from action
+					switch (actionId)
+					{
+						case 1: {//move right
+							springai::AIFloat3 currentPos = unit->GetPos();
+							springai::AIFloat3 targetPos = springai::AIFloat3(currentPos.x + 10.0f, currentPos.y, currentPos.z); 
+							unit->MoveTo(targetPos);
+							break;
+						}
+						
+						case 2: {//move left
+							springai::AIFloat3 currentPos = unit->GetPos();
+							springai::AIFloat3 targetPos = springai::AIFloat3(currentPos.x - 10.0f, currentPos.y, currentPos.z); 
+							unit->MoveTo(targetPos);
+							break;
+						}
+						
+						case 3: {//move up
+							springai::AIFloat3 currentPos = unit->GetPos();
+							springai::AIFloat3 targetPos = springai::AIFloat3(currentPos.x, currentPos.y, currentPos.z + 10.0f); 
+							unit->MoveTo(targetPos);
+							break;
+						}
+
+						case 4: {//move down
+							springai::AIFloat3 currentPos = unit->GetPos();
+							springai::AIFloat3 targetPos = springai::AIFloat3(currentPos.x, currentPos.y, currentPos.z - 10.0f); 
+							unit->MoveTo(targetPos);
+							break;
+						}
+
+						case 5: {//attack 
+							int enemyUnitId = 3; // TODO: Replace with actual enemy unit ID from action
+							springai::Unit* enemyUnit = springai::WrappUnit::GetInstance(teamId_, enemyUnitId);
+							unit->Attack(enemyUnit);
+						}
+					}
 				}
+				
 				
 			}
 			
