@@ -7,6 +7,8 @@
 #include "WrappUnit.h"
 #include "Map.h"
 #include "UnBARableAI/UnBARableAIClient.h"
+#include "UnBARableAI/unit_data.h"
+#include "UnBARableAI/action.h"
 #include <iostream>
 #include <cstdlib>
 #include <ctime>
@@ -52,7 +54,8 @@ void UnBARableAI::HandleEvent(int topic, const void* data) {
 		}
 		case EVENT_UPDATE: {
 			const SUpdateEvent* event = static_cast<const SUpdateEvent*>(data);
-			if (event->frame % 230 == 0) {
+			if ((event->frame % 230 - 2) == 0 && event->frame > 0) {
+				std::cout << "start: " << event->frame << " ---------------------------" << std::endl;
 				for (springai::Unit* unit : callback_->GetFriendlyUnits()){
 					int unitId = unit->GetUnitId();
 					int unitDefId = unit->GetDef()->GetUnitDefId();
@@ -73,6 +76,27 @@ void UnBARableAI::HandleEvent(int topic, const void* data) {
 					float captureProgress = unit->GetCaptureProgress();
 					float paralyzeDamage = unit->GetParalyzeDamage();
 					std::cout << unitId << unitName << humanName << teamId << allyTeamId << health << maxHealth <<  posX << posY << posZ << "), LOS Radius: " << losRadius << ", Air LOS Radius: " << airLosRadius << ", Is Dead: " << isDead << ", Being Built: " << beingBuilt << ", Build Progress: " << buildProgress << ", Capture Progress: " << captureProgress << ", Paralyze Damage: " << paralyzeDamage << std::endl;
+					UnBARableAINS::unit::UnitData unitData = {
+						unitId,
+						unitDefId,
+						unitName,
+						humanName,
+						teamId,
+						allyTeamId,
+						health,
+						maxHealth,
+						posX,
+						posY,
+						posZ,
+						losRadius,
+						airLosRadius,
+						isDead,
+						beingBuilt,
+						buildProgress,
+						captureProgress,
+						paralyzeDamage
+					};
+					std::cout << "UnitData for unit " << unitId << " created." << std::endl;
 					// TODO: Observation in shared memory schreiben
 				}
 				UnBARableAIClient client = UnBARableAIClient();
@@ -82,16 +106,27 @@ void UnBARableAI::HandleEvent(int topic, const void* data) {
 						std::cout << "Event update sent successfully" << std::endl;
 					}
 				// TODO: Action aus shared memory auslesen
-				for (int i = 0; i < 5; ++i) {
-					int unitId = 2; // TODO: Replace with actual unit ID from action
-					springai::Unit* unit = springai::WrappUnit::GetInstance(teamId_, unitId);
-					int actionId = 1; // TODO: Replace with actual action ID from action
-					switch (actionId)
+				std::cout << "Reading action" << event->frame << std::endl;
+				UnBARableAINS::Action action = {
+					2, // unit_id
+					1, // unit_def_id
+					"unit_def_name", // unit_def_name
+					"human_name", // human_name
+					teamId_, // team_id
+					0, // ally_team_id
+					1, // action_id (1: move right)
+					3  // target_unit_id (only used for attack action)
+				}; // TODO: Replace with actual action from shared memory
+				
+				while (false) { // TODO: Replace with something to go through all actions
+					springai::Unit* unit = springai::WrappUnit::GetInstance(action.team_id, action.unit_id);
+					switch (action.action_id)
 					{
 						case 1: {//move right
 							springai::AIFloat3 currentPos = unit->GetPos();
 							springai::AIFloat3 targetPos = springai::AIFloat3(currentPos.x + 10.0f, currentPos.y, currentPos.z); 
 							unit->MoveTo(targetPos);
+							std::cout << "Unit " << action.unit_id << " moving right to position (" << targetPos.x << ", " << targetPos.y << ", " << targetPos.z << ")" << std::endl;
 							break;
 						}
 						
@@ -99,6 +134,7 @@ void UnBARableAI::HandleEvent(int topic, const void* data) {
 							springai::AIFloat3 currentPos = unit->GetPos();
 							springai::AIFloat3 targetPos = springai::AIFloat3(currentPos.x - 10.0f, currentPos.y, currentPos.z); 
 							unit->MoveTo(targetPos);
+							std::cout << "Unit " << action.unit_id << " moving left to position (" << targetPos.x << ", " << targetPos.y << ", " << targetPos.z << ")" << std::endl;
 							break;
 						}
 						
@@ -106,6 +142,7 @@ void UnBARableAI::HandleEvent(int topic, const void* data) {
 							springai::AIFloat3 currentPos = unit->GetPos();
 							springai::AIFloat3 targetPos = springai::AIFloat3(currentPos.x, currentPos.y, currentPos.z + 10.0f); 
 							unit->MoveTo(targetPos);
+							std::cout << "Unit " << action.unit_id << " moving up to position (" << targetPos.x << ", " << targetPos.y << ", " << targetPos.z << ")" << std::endl;
 							break;
 						}
 
@@ -113,13 +150,15 @@ void UnBARableAI::HandleEvent(int topic, const void* data) {
 							springai::AIFloat3 currentPos = unit->GetPos();
 							springai::AIFloat3 targetPos = springai::AIFloat3(currentPos.x, currentPos.y, currentPos.z - 10.0f); 
 							unit->MoveTo(targetPos);
+							std::cout << "Unit " << action.unit_id << " moving down to position (" << targetPos.x << ", " << targetPos.y << ", " << targetPos.z << ")" << std::endl;
 							break;
 						}
 
 						case 5: {//attack 
-							int enemyUnitId = 3; // TODO: Replace with actual enemy unit ID from action
-							springai::Unit* enemyUnit = springai::WrappUnit::GetInstance(teamId_, enemyUnitId);
+							springai::Unit* enemyUnit = springai::WrappUnit::GetInstance(action.team_id, action.target_unit_id);
 							unit->Attack(enemyUnit);
+							std::cout << "Unit " << action.unit_id << " attacking unit " << action.target_unit_id << std::endl;
+							break;
 						}
 					}
 				}
