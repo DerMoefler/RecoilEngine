@@ -55,50 +55,23 @@ void UnBARableAI::HandleEvent(int topic, const void* data) {
 		case EVENT_UPDATE: {
 			const SUpdateEvent* event = static_cast<const SUpdateEvent*>(data);
 			if ((event->frame % 230 - 2) == 0 && event->frame > 0) {
-				std::cout << "start: " << event->frame << " ---------------------------" << std::endl;
+				std::cout << "start of eventUpdate at frame: " << event->frame << " ---------------------------" << std::endl;
 				for (springai::Unit* unit : callback_->GetFriendlyUnits()){
-					int unitId = unit->GetUnitId();
-					int unitDefId = unit->GetDef()->GetUnitDefId();
-					std::string unitName = unit->GetDef()->GetName();
-					std::string humanName = unit->GetDef()->GetHumanName();
-					int teamId = unit->GetTeam();
-					int allyTeamId = unit->GetAllyTeam();
-					float health = unit->GetHealth();
-					float maxHealth = unit->GetMaxHealth();
-					float posX = unit->GetPos().x;
-					float posY = unit->GetPos().y;
-					float posZ = unit->GetPos().z;
-					float losRadius = unit->GetDef()->GetLosRadius();
-					float airLosRadius = unit->GetDef()->GetAirLosRadius();
-					bool isDead = (health <= 0.0f);
-					bool beingBuilt = (unit->GetBuildProgress() < 1.0f);
-					float buildProgress = unit->GetBuildProgress();
-					float captureProgress = unit->GetCaptureProgress();
-					float paralyzeDamage = unit->GetParalyzeDamage();
-					std::cout << unitId << unitName << humanName << teamId << allyTeamId << health << maxHealth <<  posX << posY << posZ << "), LOS Radius: " << losRadius << ", Air LOS Radius: " << airLosRadius << ", Is Dead: " << isDead << ", Being Built: " << beingBuilt << ", Build Progress: " << buildProgress << ", Capture Progress: " << captureProgress << ", Paralyze Damage: " << paralyzeDamage << std::endl;
-					UnBARableAINS::unit::UnitData unitData = {
-						unitId,
-						unitDefId,
-						unitName,
-						humanName,
-						teamId,
-						allyTeamId,
-						health,
-						maxHealth,
-						posX,
-						posY,
-						posZ,
-						losRadius,
-						airLosRadius,
-						isDead,
-						beingBuilt,
-						buildProgress,
-						captureProgress,
-						paralyzeDamage
-					};
-					std::cout << "UnitData for unit " << unitId << " created." << std::endl;
-					// TODO: Observation in shared memory schreiben
+					writeObservationToSharedMemory(unit);
 				}
+				std::cout << "friendly units written to shared memory" << std::endl;
+				
+				for (springai::Unit* unit : callback_->GetEnemyUnitsInRadarAndLos()){
+					writeObservationToSharedMemory(unit);
+					std::cout << "HAaaaaaalooosdfisiodfdsoifoisjf" << std::endl;
+				}
+				std::cout << "enemy units written to shared memory" << std::endl;
+
+				for (springai::Unit* unit : callback_->GetNeutralUnits()){
+					writeObservationToSharedMemory(unit);
+				}
+				std::cout << "neutral units written to shared memory" << std::endl;
+
 				UnBARableAIClient client = UnBARableAIClient();
 				if (!client.HandleEventUpdate()) {
 						std::cerr << "Failed to send event update: " << client.GetLastError() << std::endl;
@@ -106,12 +79,9 @@ void UnBARableAI::HandleEvent(int topic, const void* data) {
 						std::cout << "Event update sent successfully" << std::endl;
 					}
 				// TODO: Action aus shared memory auslesen
-				std::cout << "Reading action" << event->frame << std::endl;
+				std::cout << "Reading action at Frame: " << event->frame << std::endl;
 				UnBARableAINS::Action action = {
 					2, // unit_id
-					1, // unit_def_id
-					"unit_def_name", // unit_def_name
-					"human_name", // human_name
 					teamId_, // team_id
 					0, // ally_team_id
 					1, // action_id (1: move right)
@@ -162,13 +132,55 @@ void UnBARableAI::HandleEvent(int topic, const void* data) {
 						}
 					}
 				}
-				
-				
+				std::cout << "end of eventUpdate at frame: " << event->frame << " ---------------------------" << std::endl;
 			}
-			
 			break;
 		}
 		default:
 			break;
 	}
+}
+
+void UnBARableAI::writeObservationToSharedMemory(springai::Unit* unit) {
+	int unitId = unit->GetUnitId();
+	int unitDefId = unit->GetDef()->GetUnitDefId();
+	std::string unitName = unit->GetDef()->GetName();
+	std::string humanName = unit->GetDef()->GetHumanName();
+	int teamId = unit->GetTeam();
+	int allyTeamId = unit->GetAllyTeam();
+	float health = unit->GetHealth();
+	float maxHealth = unit->GetMaxHealth();
+	float posX = unit->GetPos().x;
+	float posY = unit->GetPos().y;
+	float posZ = unit->GetPos().z;
+	float losRadius = unit->GetDef()->GetLosRadius();
+	float airLosRadius = unit->GetDef()->GetAirLosRadius();
+	bool isDead = (health <= 0.0f);
+	bool beingBuilt = (unit->GetBuildProgress() < 1.0f);
+	float buildProgress = unit->GetBuildProgress();
+	float captureProgress = unit->GetCaptureProgress();
+	float paralyzeDamage = unit->GetParalyzeDamage();
+	std::cout << unitId << unitName << humanName << teamId << allyTeamId << health << maxHealth <<  posX << posY << posZ << "), LOS Radius: " << losRadius << ", Air LOS Radius: " << airLosRadius << ", Is Dead: " << isDead << ", Being Built: " << beingBuilt << ", Build Progress: " << buildProgress << ", Capture Progress: " << captureProgress << ", Paralyze Damage: " << paralyzeDamage << std::endl;
+	UnBARableAINS::unit::UnitData unitData = {
+		unitId,
+		unitDefId,
+		unitName,
+		humanName,
+		teamId,
+		allyTeamId,
+		health,
+		maxHealth,
+		posX,
+		posY,
+		posZ,
+		losRadius,
+		airLosRadius,
+		isDead,
+		beingBuilt,
+		buildProgress,
+		captureProgress,
+		paralyzeDamage
+	};
+	std::cout << "UnitData for unit " << unitId << " created." << std::endl;
+	// TODO: Observation in shared memory schreiben
 }

@@ -51,10 +51,9 @@
 	{  
 		Host = 0;
 	    IsFromDemo = 0;
-	    Name = "UnBARableAI";
-	    ShortName = "UnBARableAI";
+	    Name = "SimpleAI";
+	    ShortName = "SimpleAI";
 	    Team = 1;
-		Version = stable;	
 	}
 
 	[modoptions]

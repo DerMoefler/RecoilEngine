@@ -12,6 +12,8 @@ public:
 	void HandleEvent(int topic, const void* data);
 
 private:
+	void writeObservationToSharedMemory(springai::Unit* unit);
+
 	springai::OOAICallback* callback_;
 	std::vector<int> myUnits_;
 	int teamId_;
