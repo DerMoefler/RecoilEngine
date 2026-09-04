@@ -63,7 +63,6 @@ void UnBARableAI::HandleEvent(int topic, const void* data) {
 				
 				for (springai::Unit* unit : callback_->GetEnemyUnitsInRadarAndLos()){
 					writeObservationToSharedMemory(unit);
-					std::cout << "HAaaaaaalooosdfisiodfdsoifoisjf" << std::endl;
 				}
 				std::cout << "enemy units written to shared memory" << std::endl;
 
@@ -84,52 +83,44 @@ void UnBARableAI::HandleEvent(int topic, const void* data) {
 					2, // unit_id
 					teamId_, // team_id
 					0, // ally_team_id
-					1, // action_id (1: move right)
+					UnBARableAINS::ActionId::MoveRight, // action_id
 					3  // target_unit_id (only used for attack action)
 				}; // TODO: Replace with actual action from shared memory
 				
 				while (false) { // TODO: Replace with something to go through all actions
 					springai::Unit* unit = springai::WrappUnit::GetInstance(action.team_id, action.unit_id);
-					switch (action.action_id)
-					{
-						case 1: {//move right
-							springai::AIFloat3 currentPos = unit->GetPos();
-							springai::AIFloat3 targetPos = springai::AIFloat3(currentPos.x + 10.0f, currentPos.y, currentPos.z); 
-							unit->MoveTo(targetPos);
-							std::cout << "Unit " << action.unit_id << " moving right to position (" << targetPos.x << ", " << targetPos.y << ", " << targetPos.z << ")" << std::endl;
-							break;
+					if (action.action_id == UnBARableAINS::ActionId::Attack) {
+						springai::Unit* enemyUnit = springai::WrappUnit::GetInstance(action.team_id, action.target_unit_id);
+						unit->Attack(enemyUnit);
+						std::cout << "Unit " << action.unit_id << " attacking unit " << action.target_unit_id << std::endl;
+					}
+					else {
+						springai::AIFloat3 currentPos = unit->GetPos();
+						springai::AIFloat3 targetPos = currentPos;
+						float moveDistance = 10.0f; 
+						switch (action.action_id) {
+							case UnBARableAINS::ActionId::MoveRight: {
+								targetPos.x += moveDistance;
+								std::cout << "Unit " << action.unit_id << " moving right to position (" << targetPos.x << ", " << targetPos.y << ", " << targetPos.z << ")" << std::endl;
+								break;
+							}
+							case UnBARableAINS::ActionId::MoveLeft: {
+								targetPos.x -= moveDistance;
+								std::cout << "Unit " << action.unit_id << " moving left to position (" << targetPos.x << ", " << targetPos.y << ", " << targetPos.z << ")" << std::endl;
+								break;
+							}
+							case UnBARableAINS::ActionId::MoveUp: {
+								targetPos.z += moveDistance;
+								std::cout << "Unit " << action.unit_id << " moving up to position (" << targetPos.x << ", " << targetPos.y << ", " << targetPos.z << ")" << std::endl;
+								break;
+							}
+							case UnBARableAINS::ActionId::MoveDown: {
+								targetPos.z -= moveDistance;
+								std::cout << "Unit " << action.unit_id << " moving down to position (" << targetPos.x << ", " << targetPos.y << ", " << targetPos.z << ")" << std::endl;
+								break;
+							}
 						}
-						
-						case 2: {//move left
-							springai::AIFloat3 currentPos = unit->GetPos();
-							springai::AIFloat3 targetPos = springai::AIFloat3(currentPos.x - 10.0f, currentPos.y, currentPos.z); 
-							unit->MoveTo(targetPos);
-							std::cout << "Unit " << action.unit_id << " moving left to position (" << targetPos.x << ", " << targetPos.y << ", " << targetPos.z << ")" << std::endl;
-							break;
-						}
-						
-						case 3: {//move up
-							springai::AIFloat3 currentPos = unit->GetPos();
-							springai::AIFloat3 targetPos = springai::AIFloat3(currentPos.x, currentPos.y, currentPos.z + 10.0f); 
-							unit->MoveTo(targetPos);
-							std::cout << "Unit " << action.unit_id << " moving up to position (" << targetPos.x << ", " << targetPos.y << ", " << targetPos.z << ")" << std::endl;
-							break;
-						}
-
-						case 4: {//move down
-							springai::AIFloat3 currentPos = unit->GetPos();
-							springai::AIFloat3 targetPos = springai::AIFloat3(currentPos.x, currentPos.y, currentPos.z - 10.0f); 
-							unit->MoveTo(targetPos);
-							std::cout << "Unit " << action.unit_id << " moving down to position (" << targetPos.x << ", " << targetPos.y << ", " << targetPos.z << ")" << std::endl;
-							break;
-						}
-
-						case 5: {//attack 
-							springai::Unit* enemyUnit = springai::WrappUnit::GetInstance(action.team_id, action.target_unit_id);
-							unit->Attack(enemyUnit);
-							std::cout << "Unit " << action.unit_id << " attacking unit " << action.target_unit_id << std::endl;
-							break;
-						}
+						unit->MoveTo(targetPos);
 					}
 				}
 				std::cout << "end of eventUpdate at frame: " << event->frame << " ---------------------------" << std::endl;

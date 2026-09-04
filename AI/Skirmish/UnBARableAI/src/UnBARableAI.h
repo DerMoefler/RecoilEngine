@@ -6,9 +6,22 @@
 
 class UnBARableAI {
 public:
+
+	/**
+	 * \brief Constructor
+	 * \param callback The callback interface provided by the game engine.
+	 */
 	UnBARableAI(springai::OOAICallback* callback);
 	~UnBARableAI();
 
+
+	/**
+	 * \brief Handles events from the game engine.
+	 * \param topic type of the event 
+	 * \param data pointer to the event data
+	 * 
+	 * \ref RecoilEngine/rts/ExternalAI/Interface/AISEvents.h defines the event topics and their corresponding data structures.
+	 */
 	void HandleEvent(int topic, const void* data);
 
 private:
