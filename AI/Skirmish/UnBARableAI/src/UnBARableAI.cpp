@@ -34,14 +34,19 @@ void UnBARableAI::HandleEvent(int topic, const void* data) {
 		}
 		case EVENT_UNIT_CREATED: {
 			const SUnitCreatedEvent* event = static_cast<const SUnitCreatedEvent*>(data);
-			myUnits_.push_back(event->unit);
 			springai::Unit* unit = springai::WrappUnit::GetInstance(teamId_, event->unit);
-			std::cout << "Unit created: " << event->unit << std::endl;
+			std::cout << "Unit created, name : " << unit->GetDef()->GetName() << ", ID: " << unit->GetUnitId() << std::endl;
 			break;
 		}
 		case EVENT_UNIT_FINISHED: {
 			const SUnitFinishedEvent* event = static_cast<const SUnitFinishedEvent*>(data);
 			springai::Unit* unit = springai::WrappUnit::GetInstance(teamId_, event->unit);
+			break;
+		}
+		case EVENT_UNIT_DESTROYED: {
+			const SUnitDestroyedEvent* event = static_cast<const SUnitDestroyedEvent*>(data);
+			springai::Unit* unit = springai::WrappUnit::GetInstance(teamId_, event->unit);
+			std::cout << "Unit destroyed, name : " << unit->GetDef()->GetName() << ", ID: " << unit->GetUnitId() << ", Attacker: " << event->attacker << std::endl;
 			break;
 		}
 		case EVENT_UNIT_IDLE: {
