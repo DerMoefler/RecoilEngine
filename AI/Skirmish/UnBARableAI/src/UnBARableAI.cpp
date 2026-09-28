@@ -9,6 +9,7 @@
 #include "UnBARableAI/UnBARableAIClient.h"
 #include "UnBARableAI/unit_data.h"
 #include "UnBARableAI/action.h"
+#include "UnBARableAI/bar_shared_memory.h"
 #include <iostream>
 #include <cstdlib>
 #include <ctime>
@@ -31,6 +32,9 @@ void UnBARableAI::HandleEvent(int topic, const void* data) {
 			// Initialization event
 			std::cout << "UnBARableAI received INIT event" << std::endl;
 			break;
+		}
+		case EVENT_RELEASE: {
+			//TODO: Vielleicht in sm schreiben warum gecrashed
 		}
 		case EVENT_UNIT_CREATED: {
 			const SUnitCreatedEvent* event = static_cast<const SUnitCreatedEvent*>(data);
@@ -178,5 +182,7 @@ void UnBARableAI::writeObservationToSharedMemory(springai::Unit* unit) {
 		paralyzeDamage
 	};
 	std::cout << "UnitData for unit " << unitId << " created." << std::endl;
-	// TODO: Observation in shared memory schreiben
+	auto sharedMemory = UnBARableAINS::memory::BarSharedMemory::open("/bar_shared_memory");
+	const auto serializableId = sharedMemory.writeUnitData(unit);
+	//TODO: noch was machen mit der ID
 }

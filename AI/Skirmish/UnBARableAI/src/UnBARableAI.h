@@ -28,7 +28,6 @@ private:
 	void writeObservationToSharedMemory(springai::Unit* unit);
 
 	springai::OOAICallback* callback_;
-	std::vector<int> myUnits_;
 	int teamId_;
 	bool comInUse_ = true;
 };
