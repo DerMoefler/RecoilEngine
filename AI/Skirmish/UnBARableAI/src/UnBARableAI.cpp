@@ -38,8 +38,22 @@ void UnBARableAI::HandleEvent(int topic, const void* data) {
 		}
 		case EVENT_UNIT_CREATED: {
 			const SUnitCreatedEvent* event = static_cast<const SUnitCreatedEvent*>(data);
-			springai::Unit* unit = springai::WrappUnit::GetInstance(teamId_, event->unit);
-			std::cout << "Unit created, name : " << unit->GetDef()->GetName() << ", ID: " << unit->GetUnitId() << std::endl;
+			const int engineUnitId = event->unit;
+			const int customUnitId = registerUnit(engineUnitId);
+
+			springai::Unit* unit = springai::WrappUnit::GetInstance(teamId_, engineUnitId);
+
+			springai::UnitDef* unitDef = unit->GetDef();
+
+			std::cout
+				<< "Unit created, name: "
+				<< (unitDef != nullptr ? unitDef->GetName() : "unknown")
+				<< ", custom ID: "
+				<< customUnitId
+				<< ", engine ID: "
+				<< engineUnitId
+				<< std::endl;
+
 			break;
 		}
 		case EVENT_UNIT_FINISHED: {
@@ -97,9 +111,11 @@ void UnBARableAI::HandleEvent(int topic, const void* data) {
 				}; // TODO: Replace with actual action from shared memory
 				
 				while (false) { // TODO: Replace with something to go through all actions
-					springai::Unit* unit = springai::WrappUnit::GetInstance(action.team_id, action.unit_id);
+					int engineUnitId = getEngineUnitId(action.unit_id);
+					springai::Unit* unit = springai::WrappUnit::GetInstance(action.team_id, engineUnitId);
 					if (action.action_id == UnBARableAINS::ActionId::Attack) {
-						springai::Unit* enemyUnit = springai::WrappUnit::GetInstance(action.team_id, action.target_unit_id);
+						engineTargetUnitId = getEngineUnitId(action.target_unit_id);
+						springai::Unit* enemyUnit = springai::WrappUnit::GetInstance(action.team_id, engineTargetUnitId);
 						unit->Attack(enemyUnit);
 						std::cout << "Unit " << action.unit_id << " attacking unit " << action.target_unit_id << std::endl;
 					}
@@ -142,7 +158,8 @@ void UnBARableAI::HandleEvent(int topic, const void* data) {
 }
 
 void UnBARableAI::writeObservationToSharedMemory(springai::Unit* unit) {
-	int unitId = unit->GetUnitId();
+	int engineUnitId = unit->GetUnitId();
+	int customUnitId = registerUnit(engineUnitId); //wenn id schon regestriert ist wird diese zurückgegeben
 	int unitDefId = unit->GetDef()->GetUnitDefId();
 	std::string unitName = unit->GetDef()->GetName();
 	std::string humanName = unit->GetDef()->GetHumanName();
@@ -160,9 +177,9 @@ void UnBARableAI::writeObservationToSharedMemory(springai::Unit* unit) {
 	float buildProgress = unit->GetBuildProgress();
 	float captureProgress = unit->GetCaptureProgress();
 	float paralyzeDamage = unit->GetParalyzeDamage();
-	std::cout << unitId << unitName << humanName << teamId << allyTeamId << health << maxHealth <<  posX << posY << posZ << "), LOS Radius: " << losRadius << ", Air LOS Radius: " << airLosRadius << ", Is Dead: " << isDead << ", Being Built: " << beingBuilt << ", Build Progress: " << buildProgress << ", Capture Progress: " << captureProgress << ", Paralyze Damage: " << paralyzeDamage << std::endl;
+	std::cout << engineUnitId << customUnitId << unitName << humanName << teamId << allyTeamId << health << maxHealth <<  posX << posY << posZ << "), LOS Radius: " << losRadius << ", Air LOS Radius: " << airLosRadius << ", Is Dead: " << isDead << ", Being Built: " << beingBuilt << ", Build Progress: " << buildProgress << ", Capture Progress: " << captureProgress << ", Paralyze Damage: " << paralyzeDamage << std::endl;
 	UnBARableAINS::unit::UnitData unitData = {
-		unitId,
+		customUnitId,
 		unitDefId,
 		unitName,
 		humanName,
@@ -181,8 +198,54 @@ void UnBARableAI::writeObservationToSharedMemory(springai::Unit* unit) {
 		captureProgress,
 		paralyzeDamage
 	};
-	std::cout << "UnitData for unit " << unitId << " created." << std::endl;
+	std::cout << "UnitData for unit " << customUnitId << " created." << std::endl;
 	auto sharedMemory = UnBARableAINS::memory::BarSharedMemory::open("/bar_shared_memory");
 	const auto serializableId = sharedMemory.writeUnitData(unit);
 	//TODO: noch was machen mit der ID
+}
+
+int UnBARableAI::registerUnit(int engineUnitId) {
+    const auto existingUnit = engineToCustomUnitId_.find(engineUnitId);
+
+    if (existingUnit != engineToCustomUnitId_.end()) {
+        return existingUnit->second;
+    }
+
+    const int customUnitId = nextCustomUnitId_++;
+
+    engineToCustomUnitId_[engineUnitId] = customUnitId;
+    customToEngineUnitId_[customUnitId] = engineUnitId;
+
+    std::cout
+        << "Registered unit mapping: engine ID "
+        << engineUnitId
+        << " -> custom ID "
+        << customUnitId
+        << std::endl;
+
+    return customUnitId;
+}
+
+std::optional<int> UnBARableAI::getCustomUnitId(
+    int engineUnitId
+) const {
+    const auto unitEntry = engineToCustomUnitId_.find(engineUnitId);
+
+    if (unitEntry == engineToCustomUnitId_.end()) {
+        return std::nullopt;
+    }
+
+    return unitEntry->second;
+}
+
+std::optional<int> UnBARableAI::getEngineUnitId(
+    int customUnitId
+) const {
+    const auto unitEntry = customToEngineUnitId_.find(customUnitId);
+
+    if (unitEntry == customToEngineUnitId_.end()) {
+        return std::nullopt;
+    }
+
+    return unitEntry->second;
 }
