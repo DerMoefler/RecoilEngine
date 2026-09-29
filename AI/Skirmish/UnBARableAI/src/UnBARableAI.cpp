@@ -100,17 +100,13 @@ void UnBARableAI::HandleEvent(int topic, const void* data) {
 					} else {
 						std::cout << "Event update sent successfully" << std::endl;
 					}
-				// TODO: Action aus shared memory auslesen
-				std::cout << "Reading action at Frame: " << event->frame << std::endl;
-				UnBARableAINS::Action action = {
-					2, // unit_id
-					teamId_, // team_id
-					0, // ally_team_id
-					UnBARableAINS::ActionId::MoveRight, // action_id
-					3  // target_unit_id (only used for attack action)
-				}; // TODO: Replace with actual action from shared memory
+
 				
-				while (false) { // TODO: Replace with something to go through all actions
+				auto sharedMemory = UnBARableAINS::memory::BarSharedMemory::open("/bar_shared_memory");
+				std::vector<UnBARableAINS::Action> actions = sharedMemory.readAllActions();
+				std::cout << "Reading action at Frame: " << event->frame << std::endl;
+				
+				for (const UnBARableAINS::Action& action :: actions) { 
 					int engineUnitId = getEngineUnitId(action.unit_id);
 					springai::Unit* unit = springai::WrappUnit::GetInstance(action.team_id, engineUnitId);
 					if (action.action_id == UnBARableAINS::ActionId::Attack) {
