@@ -167,8 +167,3 @@ see comments in build.sh
 ```console
 docker-build-v2/images/amd64-linux/build.sh
 ```
-
-## command to build engine
-```console
-CONTAINER_IMAGE=localhost/recoil-build-amd64-linux:latest docker-build-v2/build.sh linux
-```
