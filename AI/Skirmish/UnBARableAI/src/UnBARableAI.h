@@ -42,8 +42,8 @@ private:
     int nextCustomUnitId_ = 0;
 
     int registerUnit(int engineUnitId);
-    std::optional<int> getCustomUnitId(int engineUnitId) const;
-    std::optional<int> getEngineUnitId(int customUnitId) const;
+    int getCustomUnitId(int engineUnitId) const;
+    int getEngineUnitId(int customUnitId) const;
 };
 
 #endif // UNBARABLEAI_H

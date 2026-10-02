@@ -199,42 +199,64 @@ if [[ "$(id -u)" != "$(stat -c %u /build/src)" ]]; then
   exit 1
 fi
 
-# Build cpp core INSIDE the container so it uses the same glibc/toolchain
-# as the engine build. Conan is also container-local for reproducibility.
+# Build cpp core inside the container with the same compiler as the engine.
 export CONAN_HOME=/build/out/conan2
+export CC=/usr/bin/gcc-13
+export CXX=/usr/bin/g++-13
+
 mkdir -p "$CONAN_HOME"
+
+if [[ ! -x "$CC" || ! -x "$CXX" ]]; then
+  echo "GCC 13 is not available in the container"
+  exit 1
+fi
+
+echo "Using C compiler: $CC"
+"$CC" --version | head -n 1
+
+echo "Using C++ compiler: $CXX"
+"$CXX" --version | head -n 1
 
 cd /build/cpp
 
-# Conan 2 setup inside the container
+# CC und CXX sind bereits auf GCC 13 gesetzt.
 conan profile detect --force
 
 conan install . \
-  --output-folder /build/out/cpp/Release \
+  --output-folder=/build/out/cpp/Release \
   --build=missing \
-  -s build_type=Release
+  -s build_type=Release \
+  -s compiler=gcc \
+  -s compiler.version=13 \
+  -s compiler.libcxx=libstdc++11 \
+  -s compiler.cppstd=23
 
-cmake -S /build/cpp \
+cmake \
+  -S /build/cpp \
   -B /build/out/cpp/Release \
   -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_C_COMPILER=/usr/bin/gcc-13 \
+  -DCMAKE_CXX_COMPILER=/usr/bin/g++-13 \
   -DCMAKE_TOOLCHAIN_FILE=/build/out/cpp/Release/build/Release/generators/conan_toolchain.cmake \
   -DUNBARABLEAI_BUILD_PYTHON=OFF \
   -DUNBARABLEAI_BUILD_TESTS=OFF
 
-cmake --build /build/out/cpp/Release
+cmake --build /build/out/cpp/Release --parallel
 
 cmake --install /build/out/cpp/Release \
   --prefix /build/out/cpp/install
+
 cd /build/src/docker-build-v2/scripts
+
 $CONFIGURE && ./configure.sh "$@"
+
 if $COMPILE; then
   if $CONFIGURE; then
     ./compile.sh
   else
     ./compile.sh "$@"
   fi
-  # When compiling for windows, we must strip debug info because windows does
-  # not handle the output binary size...
+
   if [[ $ENGINE_PLATFORM =~ .*windows ]]; then
     ./split-debug-info.sh
   fi
