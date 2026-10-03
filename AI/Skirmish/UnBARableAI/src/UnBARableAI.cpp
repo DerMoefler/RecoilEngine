@@ -16,6 +16,7 @@
 #include "UnBARableAI/UnBARableAIClient.h"
 #include "UnBARableAI/action.h"
 #include "UnBARableAI/bar_shared_memory.h"
+#include "UnBARableAI/debug/dump_action.hpp"
 #include "UnBARableAI/debug/dump_unit_data.hpp"
 #include "Unit.h"
 #include "UnitDef.h"
@@ -137,10 +138,11 @@ void UnBARableAI::HandleEvent(int topic, const void *data) {
                 "/unbarable_ai_read");
             std::vector<UnBARableAINS::Action> actions =
                 sharedMemory.readAllActions();
-            std::cout << "Reading action at Frame: " << event->frame
-                      << std::endl;
 
+            std::cout
+                << "UnBARableAI::HandleEvent (EVENT_UPDATE): read actions\n";
             for (const UnBARableAINS::Action &action : actions) {
+                UnBARableAINS::debug::dumpAction(std::cout, action, 1);
                 int engineUnitId = getEngineUnitId(action.unit_id);
                 springai::Unit *unit = springai::WrappUnit::GetInstance(
                     action.team_id, engineUnitId);
