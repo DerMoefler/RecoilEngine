@@ -1,4 +1,9 @@
 #include "UnBARableAI.h"
+
+#include <cstdlib>
+#include <ctime>
+#include <iostream>
+
 #include "Economy.h"
 #include "ExternalAI/Interface/AISEvents.h"
 #include "Map.h"
@@ -6,13 +11,10 @@
 #include "UnBARableAI/UnBARableAIClient.h"
 #include "UnBARableAI/action.h"
 #include "UnBARableAI/bar_shared_memory.h"
-#include "UnBARableAI/unit_data.h"
+#include "UnBARableAI/debug/dump_unit_data.hpp"
 #include "Unit.h"
 #include "UnitDef.h"
 #include "WrappUnit.h"
-#include <cstdlib>
-#include <ctime>
-#include <iostream>
 
 UnBARableAI::UnBARableAI(springai::OOAICallback *callback)
     : callback_(callback) {
@@ -196,47 +198,20 @@ void UnBARableAI::HandleEvent(int topic, const void *data) {
 }
 
 void UnBARableAI::writeObservationToSharedMemory(springai::Unit *unit) {
-    int engineUnitId = unit->GetUnitId();
-    int customUnitId = registerUnit(
-        engineUnitId); // wenn id schon regestriert ist wird diese zurückgegeben
-    int unitDefId = unit->GetDef()->GetUnitDefId();
-    std::string unitName = unit->GetDef()->GetName();
-    std::string humanName = unit->GetDef()->GetHumanName();
-    int teamId = unit->GetTeam();
-    int allyTeamId = unit->GetAllyTeam();
-    float health = unit->GetHealth();
-    float maxHealth = unit->GetMaxHealth();
-    float posX = unit->GetPos().x;
-    float posY = unit->GetPos().y;
-    float posZ = unit->GetPos().z;
-    float losRadius = unit->GetDef()->GetLosRadius();
-    float airLosRadius = unit->GetDef()->GetAirLosRadius();
-    bool isDead = (health <= 0.0f);
-    bool beingBuilt = (unit->GetBuildProgress() < 1.0f);
-    float buildProgress = unit->GetBuildProgress();
-    float captureProgress = unit->GetCaptureProgress();
-    float paralyzeDamage = unit->GetParalyzeDamage();
-    std::cout << "Engine Unit ID: " << engineUnitId
-              << ", Custom Unit ID: " << customUnitId
-              << ", Unit Name: " << unitName << ", Human Name: " << humanName
-              << ", Team ID: " << teamId << ", Ally Team ID: " << allyTeamId
-              << ", Health: " << health << ", Max Health: " << maxHealth
-              << ", Position: (" << posX << ", " << posY << ", " << posZ
-              << "), LOS Radius: " << losRadius
-              << ", Air LOS Radius: " << airLosRadius << ", Is Dead: " << isDead
-              << ", Being Built: " << beingBuilt
-              << ", Build Progress: " << buildProgress
-              << ", Capture Progress: " << captureProgress
-              << ", Paralyze Damage: " << paralyzeDamage << std::endl;
-    UnBARableAINS::unit::UnitData unitData = {
-        customUnitId, unitDefId,
-        // unitName,
-        // humanName,
-        teamId, allyTeamId, health, maxHealth, posX, posY, posZ, losRadius,
-        airLosRadius, isDead, beingBuilt, buildProgress, captureProgress,
-        paralyzeDamage};
-    std::cout << "UnitData for unit " << customUnitId << " created."
+    UnitData unitData{};
+    try {
+        unitData = getUnitData(unit);
+    } catch (const std::exception &e) {
+        std::cerr
+            << "UnBARableAI::writeObservationToSharedMemory failed. Reason: "
+            << e.what() << std::endl;
+    }
+
+    std::cout << "UnBARableAI::writeObservationToSharedMemory: Writing Unit"
               << std::endl;
+    std::cout << "\tEngine Unit ID: " << unit->GetUnitId() << std::endl;
+    UnBARableAINS::debug::dumpUnitData(std::cout, unitData, 1);
+
     auto sharedMemory =
         UnBARableAINS::memory::BarSharedMemory::open("/unbarable_ai_read");
     std::cout << "Shared memory opened for writing unit data." << std::endl;
@@ -257,6 +232,36 @@ void UnBARableAI::writeObservationToSharedMemory(springai::Unit *unit) {
 
         throw;
     }
+}
+
+UnBARableAI::UnitData UnBARableAI::getUnitData(springai::Unit *unit) {
+    UnitData unitData{};
+
+    int engineUnitId = unit->GetUnitId();
+    int customUnitId = registerUnit(
+        engineUnitId); // wenn id schon regestriert ist wird diese zurückgegeben
+
+    unitData.unit_id = customUnitId;
+    unitData.unit_def_id = unit->GetDef()->GetUnitDefId();
+    // Currently unused
+    std::string unitName = unit->GetDef()->GetName();
+    std::string humanName = unit->GetDef()->GetHumanName();
+
+    unitData.team_id = unit->GetTeam();
+    unitData.ally_team_id = unit->GetAllyTeam();
+    unitData.health = unit->GetHealth();
+    unitData.max_health = unit->GetMaxHealth();
+    unitData.pos_x = unit->GetPos().x;
+    unitData.pos_y = unit->GetPos().y;
+    unitData.pos_z = unit->GetPos().z;
+    unitData.los_radius = unit->GetDef()->GetLosRadius();
+    unitData.air_los_radius = unit->GetDef()->GetAirLosRadius();
+    unitData.is_dead = (unitData.health <= 0.0f);
+    unitData.being_built = (unit->GetBuildProgress() < 1.0f);
+    unitData.build_progress = unit->GetBuildProgress();
+    unitData.capture_progress = unit->GetCaptureProgress();
+    unitData.paralyze_damage = unit->GetParalyzeDamage();
+    return unitData;
 }
 
 int UnBARableAI::registerUnit(int engineUnitId) {
