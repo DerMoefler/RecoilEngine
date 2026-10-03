@@ -2,7 +2,9 @@
 #define UNBARABLEAI_H
 
 #include "OOAICallback.h"
+#include <filesystem>
 #include <optional>
+#include <string_view>
 #include <unordered_map>
 #include <vector>
 
@@ -30,10 +32,20 @@ class UnBARableAI {
     /// \brief Type Alias for UnitData.
     using UnitData = UnBARableAINS::unit::UnitData;
 
+    inline static constexpr std::string_view c_shm_name = "/unbarable_ai_read";
+
   private:
     void writeObservationToSharedMemory(springai::Unit *unit);
 
     UnitData getUnitData(springai::Unit *unit);
+
+    /// \brief Hexdumps the \ref c_shm_name to a logfile (see \ref
+    /// getSharedMemoryStateFilename).
+    std::filesystem::path writeSharedMemoryState(void) const;
+
+    /// \brief Get (and create missing directories) for a file to write
+    /// SharedMemory errorstate to.
+    static std::filesystem::path getSharedMemoryStateFilename(void);
 
     /**
      * \brief Registers a unit if not present, otherwise returns already

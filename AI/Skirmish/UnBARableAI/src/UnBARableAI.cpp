@@ -1,8 +1,13 @@
 #include "UnBARableAI.h"
 
+#include <chrono>
 #include <cstdlib>
 #include <ctime>
+#include <fstream>
+#include <iomanip>
+#include <ios>
 #include <iostream>
+#include <string>
 
 #include "Economy.h"
 #include "ExternalAI/Interface/AISEvents.h"
@@ -15,6 +20,8 @@
 #include "Unit.h"
 #include "UnitDef.h"
 #include "WrappUnit.h"
+#include "memory/debug/hexdump.hpp"
+#include "utility/debug/print_helpers.hpp"
 
 UnBARableAI::UnBARableAI(springai::OOAICallback *callback)
     : callback_(callback) {
@@ -207,30 +214,57 @@ void UnBARableAI::writeObservationToSharedMemory(springai::Unit *unit) {
             << e.what() << std::endl;
     }
 
-    std::cout << "UnBARableAI::writeObservationToSharedMemory: Writing Unit"
-              << std::endl;
-    std::cout << "\tEngine Unit ID: " << unit->GetUnitId() << std::endl;
-    UnBARableAINS::debug::dumpUnitData(std::cout, unitData, 1);
+    std::cout << "UnBARableAI::writeObservationToSharedMemory" << std::endl;
+    UnBARableAINS::debug::makeIndentation(std::cout, 1);
+    std::cout << "0) UnitData:\n";
+    UnBARableAINS::debug::makeIndentation(std::cout, 2);
+    std::cout << "Engine Unit ID: " << unit->GetUnitId() << std::endl;
+    UnBARableAINS::debug::dumpUnitData(std::cout, unitData, 2);
 
-    auto sharedMemory =
-        UnBARableAINS::memory::BarSharedMemory::open("/unbarable_ai_read");
-    std::cout << "Shared memory opened for writing unit data." << std::endl;
     try {
-        std::cout << "Calling writeUnitData..." << std::endl;
-
-        const auto serializableId = sharedMemory.writeUnitData(unitData);
-
-        std::cout << "UnitData successfully written. Serializable ID: "
-                  << serializableId << std::endl;
-    } catch (const std::exception &exception) {
-        std::cerr << "writeUnitData failed: " << exception.what() << std::endl;
-
-        throw;
-    } catch (...) {
-        std::cerr << "writeUnitData failed with an unknown exception."
+        auto sharedMemory =
+            UnBARableAINS::memory::BarSharedMemory::open("/unbarable_ai_read");
+        UnBARableAINS::debug::makeIndentation(std::cout, 1);
+        std::cout << "1) Shared memory opened for writing unit data."
                   << std::endl;
+        try {
+            UnBARableAINS::debug::makeIndentation(std::cout, 1);
+            std::cout << "2) Calling writeUnitData..." << std::endl;
 
-        throw;
+            const auto serializableId = sharedMemory.writeUnitData(unitData);
+
+            UnBARableAINS::debug::makeIndentation(std::cout, 1);
+            std::cout << "3) UnitData successfully written. Serializable ID: "
+                      << serializableId << std::endl;
+        } catch (const std::exception &exception) {
+            std::cerr << "writeUnitData failed: " << exception.what()
+                      << std::endl;
+
+            throw;
+        } catch (...) {
+            std::cerr << "writeUnitData failed with an unknown exception."
+                      << std::endl;
+
+            throw;
+        }
+    } catch (const std::system_error &e) {
+        std::cerr << "UnBARableAI::writeObservationToSharedMemory failed: "
+                     "System Error "
+                  << e.what() << " when opening the BarSharedMemory."
+                  << std::endl;
+    } catch (const std::exception &e) {
+        std::cerr << "UnBARableAI::writeObservationToSharedMemory failed: "
+                     "Cannot open BarSharedMemory. Reason: "
+                  << e.what() << std::endl;
+
+        try {
+            auto path = writeSharedMemoryState();
+            std::cerr << "\tWrote SharedMemory state to file" << path.string()
+                      << std::endl;
+        } catch (const std::exception &e) {
+            std::cerr << "\tCould not write shared memory state. Reason: "
+                      << e.what() << std::endl;
+        }
     }
 }
 
@@ -262,6 +296,61 @@ UnBARableAI::UnitData UnBARableAI::getUnitData(springai::Unit *unit) {
     unitData.capture_progress = unit->GetCaptureProgress();
     unitData.paralyze_damage = unit->GetParalyzeDamage();
     return unitData;
+}
+
+std::filesystem::path UnBARableAI::writeSharedMemoryState(void) const {
+    const std::filesystem::path filename = getSharedMemoryStateFilename();
+    std::ofstream output{filename};
+
+    if (!output) {
+        throw std::ios_base::failure{"UnBARableAI::writeSharedMemoryState: "
+                                     "Could not open output file '" +
+                                     filename.string() + "'"};
+    }
+
+    std::string shmName{c_shm_name};
+    if (!shmName.empty() && shmName.front() == '/') {
+        shmName.erase(0, 1);
+    }
+    const std::filesystem::path shmFilename =
+        std::filesystem::path{"/dev/shm/"} / shmName;
+    std::ifstream shmFile(shmFilename, std::ios::binary);
+    if (!shmFile) {
+        throw std::ios_base::failure{
+            "UnBARableAI::writeSharedMemoryState: Could not open shared-memory "
+            "file '" +
+            shmFilename.string() + "'"};
+    }
+
+    UnBARableAINS::memory::debug::hexdump(output, shmFile);
+
+    return filename;
+}
+
+std::filesystem::path UnBARableAI::getSharedMemoryStateFilename(void) {
+    const std::filesystem::path directory = std::filesystem::current_path() /
+                                            "UnBARableAI" / "logs" /
+                                            "shared_memory";
+    std::error_code error;
+    std::filesystem::create_directories(directory, error);
+
+    if (error) {
+        throw std::filesystem::filesystem_error{
+            "Could not create shared-memory log directory", directory, error};
+    }
+
+    const auto now = std::chrono::system_clock::now();
+    const auto microseconds =
+        std::chrono::duration_cast<std::chrono::microseconds>(
+            now.time_since_epoch());
+    const std::time_t time = std::chrono::system_clock::to_time_t(now);
+
+    std::tm localTime{};
+    localtime_r(&time, &localTime);
+    std::ostringstream timestamp;
+    timestamp << std::put_time(&localTime, "%Y-%m-%d_%H-%M-%S") << '.'
+              << std::setfill('0') << std::setw(6) << microseconds.count();
+    return directory / ("shared_memor_state_" + timestamp.str() + ".log");
 }
 
 int UnBARableAI::registerUnit(int engineUnitId) {
