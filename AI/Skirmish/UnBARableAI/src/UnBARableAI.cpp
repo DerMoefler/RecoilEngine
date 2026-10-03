@@ -62,10 +62,40 @@ void UnBARableAI::HandleEvent(int topic, const void* data) {
 			break;
 		}
 		case EVENT_UNIT_DESTROYED: {
-			const SUnitDestroyedEvent* event = static_cast<const SUnitDestroyedEvent*>(data);
-			springai::Unit* unit = springai::WrappUnit::GetInstance(teamId_, event->unit);
-			std::cout << "Unit destroyed, name : " << unit->GetDef()->GetName() << ", ID: " << unit->GetUnitId() << ", Attacker: " << event->attacker << std::endl;
-			break;
+		    const SUnitDestroyedEvent* event =
+		        static_cast<const SUnitDestroyedEvent*>(data);
+				
+		    springai::Unit* unit =
+		        springai::WrappUnit::GetInstance(teamId_, event->unit);
+				
+		    const int engineUnitId = event->unit;
+		    const int customUnitId = getCustomUnitId(engineUnitId);
+				
+		    if (unit && unit->GetDef()) {
+		        std::cout
+		            << "Unit destroyed, name: "
+		            << unit->GetDef()->GetName()
+		            << ", ID: "
+		            << engineUnitId
+		            << ", Attacker: "
+		            << event->attacker
+		            << std::endl;
+		    }
+		
+		    // Mapping entfernen
+		    if (customUnitId != -1) {
+		        engineToCustomUnitId_.erase(engineUnitId);
+		        customToEngineUnitId_.erase(customUnitId);
+			
+		        std::cout
+		            << "Removed unit mapping: engine ID "
+		            << engineUnitId
+		            << " -> custom ID "
+		            << customUnitId
+		            << std::endl;
+		    }
+		
+		    break;
 		}
 		case EVENT_UNIT_IDLE: {
 			const SUnitIdleEvent* event = static_cast<const SUnitIdleEvent*>(data);
@@ -102,7 +132,7 @@ void UnBARableAI::HandleEvent(int topic, const void* data) {
 					}
 
 				
-				auto sharedMemory = UnBARableAINS::memory::BarSharedMemory::open("/bar_shared_memory");
+				auto sharedMemory = UnBARableAINS::memory::BarSharedMemory::open("/unbarable_ai_read");
 				std::vector<UnBARableAINS::Action> actions = sharedMemory.readAllActions();
 				std::cout << "Reading action at Frame: " << event->frame << std::endl;
 				
@@ -173,7 +203,7 @@ void UnBARableAI::writeObservationToSharedMemory(springai::Unit* unit) {
 	float buildProgress = unit->GetBuildProgress();
 	float captureProgress = unit->GetCaptureProgress();
 	float paralyzeDamage = unit->GetParalyzeDamage();
-	std::cout << engineUnitId << customUnitId << unitName << humanName << teamId << allyTeamId << health << maxHealth <<  posX << posY << posZ << "), LOS Radius: " << losRadius << ", Air LOS Radius: " << airLosRadius << ", Is Dead: " << isDead << ", Being Built: " << beingBuilt << ", Build Progress: " << buildProgress << ", Capture Progress: " << captureProgress << ", Paralyze Damage: " << paralyzeDamage << std::endl;
+	std::cout << "Engine Unit ID: " << engineUnitId << ", Custom Unit ID: " << customUnitId << ", Unit Name: " << unitName << ", Human Name: " << humanName << ", Team ID: " << teamId << ", Ally Team ID: " << allyTeamId << ", Health: " << health << ", Max Health: " << maxHealth << ", Position: (" << posX << ", " << posY << ", " << posZ << "), LOS Radius: " << losRadius << ", Air LOS Radius: " << airLosRadius << ", Is Dead: " << isDead << ", Being Built: " << beingBuilt << ", Build Progress: " << buildProgress << ", Capture Progress: " << captureProgress << ", Paralyze Damage: " << paralyzeDamage << std::endl;
 	UnBARableAINS::unit::UnitData unitData = {
 		customUnitId,
 		unitDefId,
@@ -195,9 +225,36 @@ void UnBARableAI::writeObservationToSharedMemory(springai::Unit* unit) {
 		paralyzeDamage
 	};
 	std::cout << "UnitData for unit " << customUnitId << " created." << std::endl;
-	auto sharedMemory = UnBARableAINS::memory::BarSharedMemory::open("/bar_shared_memory");
-	const auto serializableId = sharedMemory.writeUnitData(unitData);
-	//TODO: noch was machen mit der ID
+	auto sharedMemory = UnBARableAINS::memory::BarSharedMemory::open("/unbarable_ai_read");
+	std::cout << "Shared memory opened for writing unit data." << std::endl;
+	try {
+		std::cout
+			<< "Calling writeUnitData..."
+			<< std::endl;
+
+		const auto serializableId =
+			sharedMemory.writeUnitData(unitData);
+
+		std::cout
+			<< "UnitData successfully written. Serializable ID: "
+			<< serializableId
+			<< std::endl;
+	}
+	catch (const std::exception& exception) {
+		std::cerr
+			<< "writeUnitData failed: "
+			<< exception.what()
+			<< std::endl;
+
+		throw;
+	}
+	catch (...) {
+		std::cerr
+			<< "writeUnitData failed with an unknown exception."
+			<< std::endl;
+
+		throw;
+	}
 }
 
 int UnBARableAI::registerUnit(int engineUnitId) {
