@@ -107,7 +107,7 @@ void UnBARableAI::HandleEvent(int topic, const void *data) {
     }
     case EVENT_UPDATE: {
         const SUpdateEvent *event = static_cast<const SUpdateEvent *>(data);
-        if ((event->frame % 230 - 2) == 0 && event->frame > 0) {
+        if ((event->frame % 2) == 0 && event->frame > 2) {
             std::cout << "start of eventUpdate at frame: " << event->frame
                       << " ---------------------------" << std::endl;
             for (springai::Unit *unit : callback_->GetFriendlyUnits()) {
@@ -145,8 +145,9 @@ void UnBARableAI::HandleEvent(int topic, const void *data) {
                 UnBARableAINS::debug::dumpAction(std::cout, action, 1);
                 int engineUnitId = getEngineUnitId(action.unit_id);
                 if (engineUnitId == -1) {
-                    std::cerr << "Error: No engine unit ID found for custom unit ID "
-                              << action.unit_id << std::endl;
+                    std::cerr
+                        << "Error: No engine unit ID found for custom unit ID "
+                        << action.unit_id << std::endl;
                     continue;
                 }
                 springai::Unit *unit = springai::WrappUnit::GetInstance(
@@ -155,7 +156,8 @@ void UnBARableAI::HandleEvent(int topic, const void *data) {
                     const int engineTargetUnitId =
                         getEngineUnitId(action.target_unit_id);
                     if (engineTargetUnitId == -1) {
-                        std::cerr << "Error: No engine unit ID found for target custom unit ID "
+                        std::cerr << "Error: No engine unit ID found for "
+                                     "target custom unit ID "
                                   << action.target_unit_id << std::endl;
                         continue;
                     }
