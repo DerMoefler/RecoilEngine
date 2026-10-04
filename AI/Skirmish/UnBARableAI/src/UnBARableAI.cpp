@@ -144,11 +144,21 @@ void UnBARableAI::HandleEvent(int topic, const void *data) {
             for (const UnBARableAINS::Action &action : actions) {
                 UnBARableAINS::debug::dumpAction(std::cout, action, 1);
                 int engineUnitId = getEngineUnitId(action.unit_id);
+                if (engineUnitId == -1) {
+                    std::cerr << "Error: No engine unit ID found for custom unit ID "
+                              << action.unit_id << std::endl;
+                    continue;
+                }
                 springai::Unit *unit = springai::WrappUnit::GetInstance(
                     action.team_id, engineUnitId);
                 if (action.action_id == UnBARableAINS::ActionId::Attack) {
                     const int engineTargetUnitId =
                         getEngineUnitId(action.target_unit_id);
+                    if (engineTargetUnitId == -1) {
+                        std::cerr << "Error: No engine unit ID found for target custom unit ID "
+                                  << action.target_unit_id << std::endl;
+                        continue;
+                    }
                     springai::Unit *enemyUnit =
                         springai::WrappUnit::GetInstance(action.team_id,
                                                          engineTargetUnitId);
