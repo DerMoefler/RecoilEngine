@@ -1857,7 +1857,8 @@ void CGame::GameEnd(const std::vector<unsigned char>& winningAllyTeams, bool tim
 	CEndGameBox::Create(winningAllyTeams);
 #ifdef    HEADLESS
 	CTimeProfiler::GetInstance().PrintProfilingInfo();
-	gu->globalQuit = true;  // Exit headless simulation after game end
+	gu->globalReload = true;
+	//gu->globalQuit = true;  // Exit headless simulation after game end
 #endif // HEADLESS
 
 	CDemoRecorder* record = clientNet->GetDemoRecorder();

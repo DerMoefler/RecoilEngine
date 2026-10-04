@@ -854,8 +854,20 @@ void SpringApp::Reload(const std::string script)
 	LOG("[SpringApp::%s][12] #script=" _STPF_ "", __func__, script.size());
 
 	if (script.empty()) {
-		// if no script, drop back to menu
+	#ifdef HEADLESS
+		const std::string scriptPath =
+			"./startscripts/3PawnVs3Pawn.txt";
+
+		LOG(
+			"[SpringApp::%s] restarting from startscript: %s",
+			__func__,
+			scriptPath.c_str()
+		);
+
+		StartScript(scriptPath);
+	#else
 		LoadSpringMenu();
+	#endif
 	} else {
 		activeController = RunScript(script);
 	}
