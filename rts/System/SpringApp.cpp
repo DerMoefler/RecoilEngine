@@ -855,16 +855,19 @@ void SpringApp::Reload(const std::string script)
 
 	if (script.empty()) {
 	#ifdef HEADLESS
-		const std::string scriptPath =
-			"./startscripts/3PawnVs3Pawn.txt";
+		if (inputFile.empty()) {
+			throw content_error(
+				"Cannot restart headless game: initial startscript path is empty"
+			);
+		}
 
 		LOG(
-			"[SpringApp::%s] restarting from startscript: %s",
+			"[SpringApp::%s] restarting initial startscript: %s",
 			__func__,
-			scriptPath.c_str()
+			inputFile.c_str()
 		);
 
-		StartScript(scriptPath);
+		StartScript(inputFile);
 	#else
 		LoadSpringMenu();
 	#endif
