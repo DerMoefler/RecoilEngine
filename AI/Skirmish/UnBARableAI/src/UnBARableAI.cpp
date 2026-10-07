@@ -43,7 +43,27 @@ void UnBARableAI::HandleEvent(int topic, const void *data) {
         break;
     }
     case EVENT_RELEASE: {
-        // TODO: Vielleicht in sm schreiben warum gecrashed
+        /** 
+            * Values description for reason:
+            * 0: unspecified
+            * 1: game ended
+            * 2: team died
+            * 3: AI killed
+            * 4: AI crashed
+            * 5: AI failed to init
+            * 6: connection lost
+            * 7: other reason
+        **/
+        const SReleaseEvent *event = static_cast<const SReleaseEvent *>(data);
+        const int reason = event->reason;
+        UnBARableAIClient client = UnBARableAIClient();
+            if (!client.HandleEventUpdate(5000)) {
+                std::cerr << "Failed to send event update: "
+                          << client.GetLastError() << std::endl;
+            } else {
+                std::cout << "Event update sent successfully" << std::endl;
+            }
+
     }
     case EVENT_UNIT_CREATED: {
         const SUnitCreatedEvent *event =
@@ -127,7 +147,7 @@ void UnBARableAI::HandleEvent(int topic, const void *data) {
             std::cout << "neutral units written to shared memory" << std::endl;
 
             UnBARableAIClient client = UnBARableAIClient();
-            if (!client.HandleEventUpdate()) {
+            if (!client.HandleEventUpdate(5000)) { 
                 std::cerr << "Failed to send event update: "
                           << client.GetLastError() << std::endl;
             } else {
