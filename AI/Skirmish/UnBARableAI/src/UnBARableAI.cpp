@@ -137,7 +137,7 @@ void UnBARableAI::HandleEvent(int topic, const void *data) {
             auto sharedMemory = UnBARableAINS::memory::BarSharedMemory::open(
                 "/unbarable_ai_read");
             std::vector<UnBARableAINS::Action> actions =
-                sharedMemory.readAllActions();
+                sharedMemory.readAll<UnBARableAINS::Action>();
 
             std::cout
                 << "UnBARableAI::HandleEvent (EVENT_UPDATE): read actions\n";
