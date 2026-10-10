@@ -32,8 +32,6 @@ class UnBARableAI {
     /// \brief Type Alias for UnitData.
     using UnitData = UnBARableAINS::unit::UnitData;
 
-    inline static constexpr std::string_view c_shm_name = "/unbarable_ai_read";
-
   private:
     void writeObservationToSharedMemory(springai::Unit *unit);
 

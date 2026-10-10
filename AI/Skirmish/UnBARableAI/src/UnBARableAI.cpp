@@ -345,7 +345,7 @@ std::filesystem::path UnBARableAI::writeSharedMemoryState(void) const {
                                  filename.string() + "'"};
   }
 
-  std::string shmName{c_shm_name};
+  std::string shmName{shmName_};
   if (!shmName.empty() && shmName.front() == '/') {
     shmName.erase(0, 1);
   }
