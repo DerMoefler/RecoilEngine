@@ -44,6 +44,8 @@ void UnBARableAI::HandleEvent(int topic, const void *data) {
     std::cout << "UnBARableAI received INIT event" << std::endl;
     pid_t pid = getpid();
     std::cout << "PID: " << pid << '\n';
+    shmName_ = "/sm_proc_" + std::to_string(pid);
+    std::cout << "Shared Memory Name: " << shmName_ << std::endl;
     break;
   }
   case EVENT_RELEASE: {
@@ -63,7 +65,7 @@ void UnBARableAI::HandleEvent(int topic, const void *data) {
     const auto status = static_cast<UnBARableAINS::EngineStatus>(reason);
 
     auto sharedMemory =
-        UnBARableAINS::memory::BarSharedMemory::open("/unbarable_ai_read");
+        UnBARableAINS::memory::BarSharedMemory::open(shmName_);
     const auto serializableId = sharedMemory.writeEngineStatus(status);
 
     UnBARableAIClient client = UnBARableAIClient();
@@ -155,7 +157,7 @@ void UnBARableAI::HandleEvent(int topic, const void *data) {
       std::cout << "neutral units written to shared memory" << std::endl;
 
       auto sharedMemory =
-          UnBARableAINS::memory::BarSharedMemory::open("/unbarable_ai_read");
+          UnBARableAINS::memory::BarSharedMemory::open(shmName_);
       const auto serializableId =
           sharedMemory.writeEngineStatus(UnBARableAINS::EngineStatus::RUNNING);
 
@@ -168,7 +170,7 @@ void UnBARableAI::HandleEvent(int topic, const void *data) {
       }
 
       sharedMemory =
-          UnBARableAINS::memory::BarSharedMemory::open("/unbarable_ai_read");
+          UnBARableAINS::memory::BarSharedMemory::open(shmName_);
       std::vector<UnBARableAINS::Action> actions =
           sharedMemory.readAll<UnBARableAINS::Action>();
 
@@ -261,7 +263,7 @@ void UnBARableAI::writeObservationToSharedMemory(springai::Unit *unit) {
 
   try {
     auto sharedMemory =
-        UnBARableAINS::memory::BarSharedMemory::open("/unbarable_ai_read");
+        UnBARableAINS::memory::BarSharedMemory::open(shmName_);
     UnBARableAINS::debug::makeIndentation(std::cout, 1);
     std::cout << "1) Shared memory opened for writing unit data." << std::endl;
     try {

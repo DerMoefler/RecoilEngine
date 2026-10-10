@@ -60,6 +60,7 @@ class UnBARableAI {
     springai::OOAICallback *callback_;
     int teamId_;
     bool comInUse_ = true;
+    std::string shmName_;
 
     // Engine Unit ID -> eigene fortlaufende Unit ID
     std::unordered_map<int, int> engineToCustomUnitId_;
