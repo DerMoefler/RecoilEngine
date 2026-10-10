@@ -13,6 +13,7 @@
 #include "ExternalAI/Interface/AISEvents.h"
 #include "Map.h"
 #include "Resource.h"
+#include "UnBARableAI/engine_status.h"
 #include "UnBARableAI/UnBARableAIClient.h"
 #include "UnBARableAI/action.h"
 #include "UnBARableAI/bar_shared_memory.h"
@@ -56,6 +57,11 @@ void UnBARableAI::HandleEvent(int topic, const void *data) {
         **/
         const SReleaseEvent *event = static_cast<const SReleaseEvent *>(data);
         const int reason = event->reason;
+        const auto status = static_cast<UnBARableAINS::EngineStatus>(reason);
+        
+        auto sharedMemory = UnBARableAINS::memory::BarSharedMemory::open("/unbarable_ai_read");
+        const auto serializableId = sharedMemory.writeEngineStatus(status);
+
         UnBARableAIClient client = UnBARableAIClient();
             if (!client.HandleEventUpdate(5000)) {
                 std::cerr << "Failed to send event update: "
@@ -146,6 +152,9 @@ void UnBARableAI::HandleEvent(int topic, const void *data) {
             }
             std::cout << "neutral units written to shared memory" << std::endl;
 
+            auto sharedMemory = UnBARableAINS::memory::BarSharedMemory::open("/unbarable_ai_read");
+            const auto serializableId = sharedMemory.writeEngineStatus(UnBARableAINS::EngineStatus::RUNNING);
+
             UnBARableAIClient client = UnBARableAIClient();
             if (!client.HandleEventUpdate(5000)) { 
                 std::cerr << "Failed to send event update: "
@@ -154,10 +163,9 @@ void UnBARableAI::HandleEvent(int topic, const void *data) {
                 std::cout << "Event update sent successfully" << std::endl;
             }
 
-            auto sharedMemory = UnBARableAINS::memory::BarSharedMemory::open(
+            sharedMemory = UnBARableAINS::memory::BarSharedMemory::open(
                 "/unbarable_ai_read");
-            std::vector<UnBARableAINS::Action> actions =
-                sharedMemory.readAllActions();
+            std::vector<UnBARableAINS::Action> actions = sharedMemory.readAll<UnBARableAINS::Action>();
 
             std::cout
                 << "UnBARableAI::HandleEvent (EVENT_UPDATE): read actions\n";
