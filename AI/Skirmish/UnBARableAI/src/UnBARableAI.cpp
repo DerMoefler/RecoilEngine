@@ -8,6 +8,7 @@
 #include <ios>
 #include <iostream>
 #include <string>
+#include <unistd.h>
 
 #include "Economy.h"
 #include "ExternalAI/Interface/AISEvents.h"
@@ -41,6 +42,8 @@ void UnBARableAI::HandleEvent(int topic, const void *data) {
   case EVENT_INIT: {
     // Initialization event
     std::cout << "UnBARableAI received INIT event" << std::endl;
+    pid_t pid = getpid();
+    std::cout << "PID: " << pid << '\n';
     break;
   }
   case EVENT_RELEASE: {
