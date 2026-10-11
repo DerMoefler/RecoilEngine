@@ -62,11 +62,19 @@ void UnBARableAI::HandleEvent(int topic, const void *data) {
      **/
     const SReleaseEvent *event = static_cast<const SReleaseEvent *>(data);
     const int reason = event->reason;
+    if (reason < 0 || reason > 7) {
+      std::cerr << "UnBARableAI::HandleEvent (EVENT_RELEASE): Invalid reason code: "
+                << reason << std::endl;
+      break;
+    }
     const auto status = static_cast<UnBARableAINS::EngineStatus>(reason);
 
     auto sharedMemory =
         UnBARableAINS::memory::BarSharedMemory::open(shmName_);
     const auto serializableId = sharedMemory.writeEngineStatus(status);
+
+    std::cout << "UnBARableAI::HandleEvent (EVENT_RELEASE): wrote engine status "
+              << reason << " to shared memory" << std::endl;
 
     UnBARableAIClient client = UnBARableAIClient();
     if (!client.HandleEventUpdate(5000)) {
@@ -75,6 +83,7 @@ void UnBARableAI::HandleEvent(int topic, const void *data) {
     } else {
       std::cout << "Event update sent successfully" << std::endl;
     }
+    break;
   }
   case EVENT_UNIT_CREATED: {
     const SUnitCreatedEvent *event =
