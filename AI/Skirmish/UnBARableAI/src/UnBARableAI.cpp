@@ -74,10 +74,11 @@ void UnBARableAI::HandleEvent(int topic, const void *data) {
     const auto serializableId = sharedMemory.writeEngineStatus(status);
 
     std::cout << "UnBARableAI::HandleEvent (EVENT_RELEASE): wrote engine status "
-              << reason << " to shared memory" << std::endl;
+              << reason << " to shared memory" 
+              << "Serializable ID: " << serializableId << std::endl;
 
     UnBARableAIClient client = UnBARableAIClient();
-    if (!client.HandleEventUpdate(5000)) {
+    if (!client.HandleEventUpdate()) {
       std::cerr << "Failed to send event update: " << client.GetLastError()
                 << std::endl;
     } else {
@@ -101,13 +102,6 @@ void UnBARableAI::HandleEvent(int topic, const void *data) {
               << ", custom ID: " << customUnitId
               << ", engine ID: " << engineUnitId << std::endl;
 
-    break;
-  }
-  case EVENT_UNIT_FINISHED: {
-    const SUnitFinishedEvent *event =
-        static_cast<const SUnitFinishedEvent *>(data);
-    springai::Unit *unit =
-        springai::WrappUnit::GetInstance(teamId_, event->unit);
     break;
   }
   case EVENT_UNIT_DESTROYED: {
@@ -134,15 +128,6 @@ void UnBARableAI::HandleEvent(int topic, const void *data) {
       std::cout << "Removed unit mapping: engine ID " << engineUnitId
                 << " -> custom ID " << customUnitId << std::endl;
     }
-
-    break;
-  }
-  case EVENT_UNIT_IDLE: {
-    const SUnitIdleEvent *event = static_cast<const SUnitIdleEvent *>(data);
-
-    springai::Unit *unit =
-        springai::WrappUnit::GetInstance(teamId_, event->unit);
-
     break;
   }
   case EVENT_UPDATE: {
@@ -169,9 +154,11 @@ void UnBARableAI::HandleEvent(int topic, const void *data) {
           UnBARableAINS::memory::BarSharedMemory::open(shmName_);
       const auto serializableId =
           sharedMemory.writeEngineStatus(UnBARableAINS::EngineStatus::RUNNING);
+      std::cout << "Engine status written. Serializable ID: "
+                << serializableId << std::endl;
 
       UnBARableAIClient client = UnBARableAIClient();
-      if (!client.HandleEventUpdate(5000)) {
+      if (!client.HandleEventUpdate()) {
         std::cerr << "Failed to send event update: " << client.GetLastError()
                   << std::endl;
       } else {
@@ -210,7 +197,7 @@ void UnBARableAI::HandleEvent(int topic, const void *data) {
         } else {
           springai::AIFloat3 currentPos = unit->GetPos();
           springai::AIFloat3 targetPos = currentPos;
-          float moveDistance = 10.0f;
+          float moveDistance = 100.0f;
           switch (action.action_id) {
           case UnBARableAINS::ActionId::MoveRight: {
             targetPos.x += moveDistance;
@@ -238,6 +225,10 @@ void UnBARableAI::HandleEvent(int topic, const void *data) {
             std::cout << "Unit " << action.unit_id
                       << " moving down to position (" << targetPos.x << ", "
                       << targetPos.y << ", " << targetPos.z << ")" << std::endl;
+            break;
+          }
+          case UnBARableAINS::ActionId::Attack: {
+            // Already handled above
             break;
           }
           }
