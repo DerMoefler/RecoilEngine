@@ -1,8 +1,14 @@
 INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR}/rts)
 INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR}/rts/lib)
 
-ADD_SUBDIRECTORY(fmt)
-set_target_properties(fmt PROPERTIES POSITION_INDEPENDENT_CODE ON)
+if(NOT TARGET fmt::fmt)
+	message(STATUS "Using bundled fmt")
+    ADD_SUBDIRECTORY(fmt)
+    set_target_properties(fmt PROPERTIES POSITION_INDEPENDENT_CODE ON)
+else()
+    message(STATUS "Using externally provided fmt::fmt")
+endif()
+
 ADD_SUBDIRECTORY(glad)
 ADD_SUBDIRECTORY(smmalloc)
 

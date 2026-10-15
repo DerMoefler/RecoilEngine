@@ -620,6 +620,26 @@ add_dependencies(generateSources generateVersionFiles)
 # As the libs are required by all the other sub-projects, we add them first
 # Options that affect lib selection must be declared here, before rts/lib is processed
 option(USE_MIMALLOC "Use mimalloc memory allocator" TRUE)
+
+# Prefer externally provided fmt, for example from Conan.
+if(NOT TARGET fmt::fmt)
+    find_package(fmt 12.1 CONFIG REQUIRED)
+endif()
+
+if(NOT TARGET fmt::fmt)
+    message(FATAL_ERROR "fmt was found, but fmt::fmt is unavailable")
+endif()
+
+message(STATUS "fmt include directories: ${fmt_INCLUDE_DIRS}")
+message(STATUS "fmt libraries: ${fmt_LIBRARIES}")
+
+if(NOT fmt_INCLUDE_DIRS)
+    message(FATAL_ERROR "fmt_INCLUDE_DIRS is empty")
+endif()
+
+# Recoil includes fmt headers throughout its object/static libraries.
+include_directories(SYSTEM BEFORE ${fmt_INCLUDE_DIRS})
+
 add_subdirectory(rts/lib)
 
 # Fix for MinGW assembler limitations with large object files
