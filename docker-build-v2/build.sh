@@ -253,9 +253,7 @@ cmake --install /build/out/cpp/Release \
 
 cd /build/src/docker-build-v2/scripts
 
-$CONFIGURE && ./configure.sh \
-  -DCMAKE_INSTALL_PREFIX:PATH=/build/runtime \
-  "$@"
+$CONFIGURE && ./configure.sh "$@"
 
 if $COMPILE; then
   if $CONFIGURE; then
@@ -266,6 +264,10 @@ if $COMPILE; then
 
   if [[ $ENGINE_PLATFORM =~ .*windows ]]; then
     ./split-debug-info.sh
+  fi
+  if [[ "$ENGINE_PLATFORM" =~ .*linux ]]; then
+    echo "Copying Recoil runtime into /build/runtime"
+    cp -a /build/out/install/. /build/runtime/
   fi
 fi
 ' -- "$@"
