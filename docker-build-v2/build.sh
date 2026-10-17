@@ -92,6 +92,10 @@ fi
 cd "$(dirname "$(readlink -f "$0")")/.."
 mkdir -p build-$PLATFORM .cache/ccache-$PLATFORM
 
+BAR_DATA_DIR="${BAR_DATA_DIR:-$HOME/bar-data}"
+mkdir -p "$BAR_DATA_DIR"
+BAR_DATA_DIR="$(readlink -f "$BAR_DATA_DIR")"
+
 # Build container image selection, allow overriding.
 if [[ -n "${CONTAINER_IMAGE:-}" ]]; then
   IMAGE="$CONTAINER_IMAGE"
@@ -174,6 +178,7 @@ $RUNTIME run --platform=linux/$ARCH -it --rm \
     -v "$CPP_ROOT":/build/cpp:z,ro \
     -v "$CWD${P}.cache${P}ccache-$PLATFORM":/build/cache:z,rw \
     -v "$CWD${P}build-$PLATFORM":/build/out:z,rw \
+    -v "$BAR_DATA_DIR":/build/runtime:z,rw \
     $UID_FLAGS \
     $WORKTREE_MOUNTS \
     $SUBMODULE_MOUNTS \
@@ -248,7 +253,9 @@ cmake --install /build/out/cpp/Release \
 
 cd /build/src/docker-build-v2/scripts
 
-$CONFIGURE && ./configure.sh "$@"
+$CONFIGURE && ./configure.sh \
+  -DCMAKE_INSTALL_PREFIX:PATH=/build/runtime \
+  "$@"
 
 if $COMPILE; then
   if $CONFIGURE; then
