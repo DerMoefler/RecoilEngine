@@ -1,34 +1,32 @@
-Ich kann hier keine echte Datei erzeugen oder anhängen. Speichere den folgenden kurzen Inhalt als README.md:
+# RL Start Options
 
-# RL-Startoptionen
+The options are specified in the `[MODOPTIONS]` block of the start script.
 
-Die Optionen werden im `[MODOPTIONS]`-Block des Startscripts angegeben.
-
-## Optionen
+## Options
 
 ### rl_teamX_spawn
 
-Einheiten, die für Team X beim Start gespawnt werden.
+Specifies the units spawned for team `X` at the start of the game.
 
 ```text
 rl_team1_spawn=armpw:3|armrock:2;
 ```
 
-Erzeugt 3 armpw und 2 armrock.
+Spawns 3 armpw units and 2 armrock units.
 
 ### rl_teamX_allowed
 
-Einheiten, die Team X erzeugen darf.
+Specifies which units team X is allowed to create.
 
 ```text
 rl_team1_allowed=armpw|armrock;
 ```
 
-Fehlt die Option, werden automatisch die Spawn-Einheiten erlaubt.
+If this option is omitted, all units listed in rl_teamX_spawn are automatically allowed.
 
 ### rl_spawn_spacing
 
-Abstand zwischen den gespawnten Einheiten:
+Specifies the spacing between spawned units:
 
 ```text
 rl_spawn_spacing=80;
@@ -38,11 +36,12 @@ Standard: 80, erlaubt: 20 bis 500.
 
 ### rl_remove_initial
 
-Umgang mit vorhandenen Startunits:
+Specifies how existing starting units are handled:
 
-none: nichts entfernen
-commanders: nur Commander entfernen
-all: alle ursprünglichen Startunits entfernen
+
+none: Keep all existing starting units.
+commanders: Remove commanders only.
+all: Remove all original starting units.
 
 ```text
 rl_remove_initial=all;
@@ -50,32 +49,38 @@ rl_remove_initial=all;
 
 ### rl_remove_decorations
 
-Decorations entfernen:
+Specifies whether decoration units are removed:
 
-0: behalten
-1: entfernen
+0: Keep decorations.
+1: Remove decorations.
 rl_remove_decorations=0;
 
 ### rl_enforce_allowed
 
-Allowlist erzwingen:
+Specifies whether the allowed-unit list is enforced:
 
-0: nicht prüfen
-1: unerlaubte neue Units sofort entfernen
+0: Do not check newly created units.
+1: Immediately remove newly created units that are not allowed.
 
 ```text
 rl_enforce_allowed=1;
 ```
 
-## Teamzuordnung
+## List of All Available Units
 
-Die Nicht-Gaia-Teams (Gaia ist das neutrale, von der Engine verwaltete Team in BAR/Recoil) werden nach Engine-TeamID sortiert:
+[Units.json](https://github.com/beyond-all-reason/Beyond-All-Reason/blob/master/language/en/units.json)
 
-rl_team1_*: erstes Team
-rl_team2_*: zweites Team
-rl_team3_*: drittes Team
+## Team Assignment
 
-## Beispiel: 3 gegen 10
+Non-Gaia teams are sorted by their engine team ID.
+
+Gaia is the neutral, engine-controlled team in BAR/Recoil and is not included in the RL team assignment.
+
+rl_team1_*: First non-Gaia team
+rl_team2_*: Second non-Gaia team
+rl_team3_*: Third non-Gaia team
+
+## Example: 3 vs. 10
 
 [MODOPTIONS]
 {
