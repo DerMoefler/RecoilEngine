@@ -43,6 +43,11 @@ configure_native_skirmish_ai(
     additionalLibraries
 )
 
+target_compile_definitions(
+    UnBARableAI
+    PRIVATE
+        SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_TRACE
+)
 
 
 target_link_options(UnBARableAI PRIVATE

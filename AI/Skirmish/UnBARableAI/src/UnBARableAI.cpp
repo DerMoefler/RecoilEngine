@@ -6,9 +6,11 @@
 #include <fstream>
 #include <iomanip>
 #include <ios>
-#include <iostream>
+#include <iostream> // TODO remove
 #include <string>
 #include <unistd.h>
+#include <spdlog/spdlog.h>
+#include <spdlog/sinks/stdout_color_sinks.h>
 
 #include "Economy.h"
 #include "ExternalAI/Interface/AISEvents.h"
@@ -26,11 +28,22 @@
 #include "memory/debug/hexdump.hpp"
 #include "utility/debug/print_helpers.hpp"
 
+namespace {
+auto logger = spdlog::stdout_color_mt("UnBARableAI");
+struct ConfigureLogger {
+  ConfigureLogger() {
+    logger->set_level(spdlog::level::trace);
+    logger->set_pattern(
+      "[%H:%M:%S.%e] [%^%l%$] [%n::%!] %v");
+  }
+};
+ConfigureLogger configureLogger;
+} // namespace
+
 UnBARableAI::UnBARableAI(springai::OOAICallback *callback)
     : callback_(callback) {
   teamId_ = callback_->GetSkirmishAIId();
   srand(time(NULL));
-  std::cout << "UnBARableAI initialized for team " << teamId_ << std::endl;
 }
 
 UnBARableAI::~UnBARableAI() {
@@ -41,11 +54,14 @@ void UnBARableAI::HandleEvent(int topic, const void *data) {
   switch (topic) {
   case EVENT_INIT: {
     // Initialization event
-    std::cout << "UnBARableAI received INIT event" << std::endl;
     pid_t pid = getpid();
-    std::cout << "PID: " << pid << '\n';
     shmName_ = "/sm_proc_" + std::to_string(pid);
-    std::cout << "Shared Memory Name: " << shmName_ << std::endl;
+    SPDLOG_LOGGER_INFO(
+      logger,
+      "Received INIT event: team_id={}, pid={}, shared_memory=\"{}\"",
+      teamId_,
+      pid,
+      shmName_);
     break;
   }
   case EVENT_RELEASE: {
@@ -63,8 +79,10 @@ void UnBARableAI::HandleEvent(int topic, const void *data) {
     const SReleaseEvent *event = static_cast<const SReleaseEvent *>(data);
     const int reason = event->reason;
     if (reason < 0 || reason > 7) {
-      std::cerr << "UnBARableAI::HandleEvent (EVENT_RELEASE): Invalid reason code: "
-                << reason << std::endl;
+      SPDLOG_LOGGER_ERROR(
+        logger,
+        "EVENT_RELEASE received invalid reason code {}",
+        reason);
       break;
     }
     const auto status = static_cast<UnBARableAINS::EngineStatus>(reason);
@@ -73,16 +91,22 @@ void UnBARableAI::HandleEvent(int topic, const void *data) {
         UnBARableAINS::memory::BarSharedMemory::open(shmName_);
     const auto serializableId = sharedMemory.writeEngineStatus(status);
 
-    std::cout << "UnBARableAI::HandleEvent (EVENT_RELEASE): wrote engine status "
-              << reason << " to shared memory" 
-              << "Serializable ID: " << serializableId << std::endl;
+    SPDLOG_LOGGER_INFO(
+        logger,
+        "EVENT_RELEASE wrote engine status: reason={}, serializable_id={}",
+        reason,
+        serializableId);
 
     UnBARableAIClient client = UnBARableAIClient();
     if (!client.HandleEventUpdate()) {
-      std::cerr << "Failed to send event update: " << client.GetLastError()
-                << std::endl;
+      SPDLOG_LOGGER_ERROR(
+        logger,
+        "Failed to send event update: {}",
+        client.GetLastError());
     } else {
-      std::cout << "Event update sent successfully" << std::endl;
+      SPDLOG_LOGGER_INFO(
+        logger,
+        "Release event update sent successfully");
     }
     break;
   }
@@ -97,10 +121,12 @@ void UnBARableAI::HandleEvent(int topic, const void *data) {
 
     springai::UnitDef *unitDef = unit->GetDef();
 
-    std::cout << "Unit created, name: "
-              << (unitDef != nullptr ? unitDef->GetName() : "unknown")
-              << ", custom ID: " << customUnitId
-              << ", engine ID: " << engineUnitId << std::endl;
+    SPDLOG_LOGGER_INFO(
+        logger,
+        "Unit created, name: {}, custom ID: {}, engine ID: {}",
+        (unitDef != nullptr ? unitDef->GetName() : "unknown"),
+        customUnitId,
+        engineUnitId);
 
     break;
   }
@@ -115,9 +141,14 @@ void UnBARableAI::HandleEvent(int topic, const void *data) {
     const int customUnitId = getCustomUnitId(engineUnitId);
 
     if (unit && unit->GetDef()) {
-      std::cout << "Unit destroyed, name: " << unit->GetDef()->GetName()
-                << ", ID: " << engineUnitId << ", Attacker: " << event->attacker
-                << std::endl;
+      SPDLOG_LOGGER_INFO(
+        logger,
+        "Unit destroyed: name=\"{}\", engine_unit_id={}, "
+        "custom_unit_id={}, attacker_engine_id={}",
+        unit->GetDef()->GetName(),
+        engineUnitId,
+        customUnitId,
+        event->attacker);
     }
 
     // Mapping entfernen
@@ -125,44 +156,67 @@ void UnBARableAI::HandleEvent(int topic, const void *data) {
       engineToCustomUnitId_.erase(engineUnitId);
       customToEngineUnitId_.erase(customUnitId);
 
-      std::cout << "Removed unit mapping: engine ID " << engineUnitId
-                << " -> custom ID " << customUnitId << std::endl;
+      SPDLOG_LOGGER_DEBUG(
+        logger,
+        "Removed unit mapping: engine ID {} -> custom ID {}",
+        engineUnitId,
+        customUnitId);
     }
     break;
   }
   case EVENT_UPDATE: {
     const SUpdateEvent *event = static_cast<const SUpdateEvent *>(data);
     if ((event->frame % 2) == 0 && event->frame > 2) {
-      std::cout << "start of eventUpdate at frame: " << event->frame
-                << " ---------------------------" << std::endl;
-      for (springai::Unit *unit : callback_->GetFriendlyUnits()) {
-        writeObservationToSharedMemory(unit);
-      }
-      std::cout << "friendly units written to shared memory" << std::endl;
+      SPDLOG_LOGGER_DEBUG(
+        logger,
+        "Starting update for frame {}",
+        event->frame);
+      
+      std::vector<springai::Unit *> friendlyUnits = callback_->GetFriendlyUnits();
+      std::vector<springai::Unit *> enemyUnits = callback_->GetEnemyUnitsInRadarAndLos();
+      std::vector<springai::Unit *> neutralUnits = callback_->GetNeutralUnits();
 
-      for (springai::Unit *unit : callback_->GetEnemyUnitsInRadarAndLos()) {
+      for (springai::Unit *unit : friendlyUnits) {
         writeObservationToSharedMemory(unit);
       }
-      std::cout << "enemy units written to shared memory" << std::endl;
 
-      for (springai::Unit *unit : callback_->GetNeutralUnits()) {
+      for (springai::Unit *unit : enemyUnits) {
         writeObservationToSharedMemory(unit);
       }
-      std::cout << "neutral units written to shared memory" << std::endl;
+
+      for (springai::Unit *unit : neutralUnits) {
+        writeObservationToSharedMemory(unit);
+      }
+
+      SPDLOG_LOGGER_DEBUG(
+        logger,
+        "Frame {} observations written: friendly={}, enemy={}, neutral={}",
+        event->frame,
+        friendlyUnits.size(),
+        enemyUnits.size(),
+        neutralUnits.size());
 
       auto sharedMemory =
           UnBARableAINS::memory::BarSharedMemory::open(shmName_);
       const auto serializableId =
           sharedMemory.writeEngineStatus(UnBARableAINS::EngineStatus::RUNNING);
-      std::cout << "Engine status written. Serializable ID: "
-                << serializableId << std::endl;
+      SPDLOG_LOGGER_TRACE(
+        logger,
+        "Engine status written: serializable_id={}",
+        serializableId);
 
       UnBARableAIClient client = UnBARableAIClient();
       if (!client.HandleEventUpdate()) {
-        std::cerr << "Failed to send event update: " << client.GetLastError()
-                  << std::endl;
+        SPDLOG_LOGGER_ERROR(
+          logger,
+          "Frame {} event update failed: {}",
+          event->frame,
+          client.GetLastError());
       } else {
-        std::cout << "Event update sent successfully" << std::endl;
+        SPDLOG_LOGGER_DEBUG(
+          logger,
+          "Frame {} event update sent successfully",
+          event->frame);
       }
 
       sharedMemory =
@@ -170,13 +224,32 @@ void UnBARableAI::HandleEvent(int topic, const void *data) {
       std::vector<UnBARableAINS::Action> actions =
           sharedMemory.readAll<UnBARableAINS::Action>();
 
-      std::cout << "UnBARableAI::HandleEvent (EVENT_UPDATE): read actions\n";
+      SPDLOG_LOGGER_DEBUG(
+        logger,
+        "Frame {} received {} actions",
+        event->frame,
+        actions.size());
+      
       for (const UnBARableAINS::Action &action : actions) {
-        UnBARableAINS::debug::dumpAction(std::cout, action, 1);
+        if (logger->should_log(spdlog::level::trace)) {
+          std::ostringstream dump;
+
+          UnBARableAINS::debug::dumpAction(
+              dump,
+              action,
+              1);
+
+          SPDLOG_LOGGER_TRACE(
+              logger,
+              "Received action:\n{}",
+              dump.str());
+        }
         int engineUnitId = getEngineUnitId(action.unit_id);
         if (engineUnitId == -1) {
-          std::cerr << "Error: No engine unit ID found for custom unit ID "
-                    << action.unit_id << std::endl;
+          SPDLOG_LOGGER_ERROR(
+            logger,
+            "No engine unit ID for custom unit ID {}",
+            action.unit_id);
           continue;
         }
         springai::Unit *unit =
@@ -184,16 +257,20 @@ void UnBARableAI::HandleEvent(int topic, const void *data) {
         if (action.action_id == UnBARableAINS::ActionId::Attack) {
           const int engineTargetUnitId = getEngineUnitId(action.target_unit_id);
           if (engineTargetUnitId == -1) {
-            std::cerr << "Error: No engine unit ID found for "
-                         "target custom unit ID "
-                      << action.target_unit_id << std::endl;
+            SPDLOG_LOGGER_ERROR(
+              logger,
+              "No engine unit ID found for target custom unit ID {}",
+              action.target_unit_id);
             continue;
           }
           springai::Unit *enemyUnit = springai::WrappUnit::GetInstance(
               action.team_id, engineTargetUnitId);
           unit->Attack(enemyUnit);
-          std::cout << "Unit " << action.unit_id << " attacking unit "
-                    << action.target_unit_id << std::endl;
+          SPDLOG_LOGGER_DEBUG(
+            logger,
+            "Unit {} attacks unit {}",
+            action.unit_id,
+            action.target_unit_id);
         } else {
           springai::AIFloat3 currentPos = unit->GetPos();
           springai::AIFloat3 targetPos = currentPos;
@@ -201,30 +278,18 @@ void UnBARableAI::HandleEvent(int topic, const void *data) {
           switch (action.action_id) {
           case UnBARableAINS::ActionId::MoveRight: {
             targetPos.x += moveDistance;
-            std::cout << "Unit " << action.unit_id
-                      << " moving right to position (" << targetPos.x << ", "
-                      << targetPos.y << ", " << targetPos.z << ")" << std::endl;
             break;
           }
           case UnBARableAINS::ActionId::MoveLeft: {
             targetPos.x -= moveDistance;
-            std::cout << "Unit " << action.unit_id
-                      << " moving left to position (" << targetPos.x << ", "
-                      << targetPos.y << ", " << targetPos.z << ")" << std::endl;
             break;
           }
           case UnBARableAINS::ActionId::MoveUp: {
             targetPos.z += moveDistance;
-            std::cout << "Unit " << action.unit_id << " moving up to position ("
-                      << targetPos.x << ", " << targetPos.y << ", "
-                      << targetPos.z << ")" << std::endl;
             break;
           }
           case UnBARableAINS::ActionId::MoveDown: {
             targetPos.z -= moveDistance;
-            std::cout << "Unit " << action.unit_id
-                      << " moving down to position (" << targetPos.x << ", "
-                      << targetPos.y << ", " << targetPos.z << ")" << std::endl;
             break;
           }
           case UnBARableAINS::ActionId::Attack: {
@@ -233,10 +298,19 @@ void UnBARableAI::HandleEvent(int topic, const void *data) {
           }
           }
           unit->MoveTo(targetPos);
+          SPDLOG_LOGGER_DEBUG(
+            logger,
+            "Unit {} moves to ({}, {}, {})",
+            action.unit_id,
+            targetPos.x,
+            targetPos.y,
+            targetPos.z);
         }
       }
-      std::cout << "end of eventUpdate at frame: " << event->frame
-                << " ---------------------------" << std::endl;
+      SPDLOG_LOGGER_DEBUG(
+        logger,
+        "Finished update for frame {}",
+        event->frame);
     }
     break;
   }
@@ -250,57 +324,104 @@ void UnBARableAI::writeObservationToSharedMemory(springai::Unit *unit) {
   try {
     unitData = getUnitData(unit);
   } catch (const std::exception &e) {
-    std::cerr << "UnBARableAI::writeObservationToSharedMemory failed. Reason: "
-              << e.what() << std::endl;
+    SPDLOG_LOGGER_ERROR(
+        logger,
+        "Getting UnitData failed for engine_unit_id={}: {}",
+        unit->GetUnitId(),
+        e.what());
   }
 
-  std::cout << "UnBARableAI::writeObservationToSharedMemory" << std::endl;
-  UnBARableAINS::debug::makeIndentation(std::cout, 1);
-  std::cout << "0) UnitData:\n";
-  UnBARableAINS::debug::makeIndentation(std::cout, 2);
-  std::cout << "Engine Unit ID: " << unit->GetUnitId() << std::endl;
-  UnBARableAINS::debug::dumpUnitData(std::cout, unitData, 2);
+  SPDLOG_LOGGER_DEBUG(
+      logger,
+      "Writing observation to shared memory for engine_unit_id={}",
+      unit->GetUnitId());
+  
+  
+  if (logger->should_log(spdlog::level::trace)) {
+    UnBARableAINS::debug::makeIndentation(std::cout, 1);
+    SPDLOG_LOGGER_TRACE(
+        logger,
+        "UnitData:");
+    UnBARableAINS::debug::makeIndentation(std::cout, 2);
+
+    std::ostringstream dump;
+
+    UnBARableAINS::debug::dumpUnitData(
+        dump,
+        unitData,
+        2);
+
+    SPDLOG_LOGGER_TRACE(
+        logger,
+        "UnitData for engine_unit_id={}:\n{}",
+        unit->GetUnitId(),
+        dump.str());
+  }
 
   try {
     auto sharedMemory =
         UnBARableAINS::memory::BarSharedMemory::open(shmName_);
     UnBARableAINS::debug::makeIndentation(std::cout, 1);
-    std::cout << "1) Shared memory opened for writing unit data." << std::endl;
+    SPDLOG_LOGGER_DEBUG(
+        logger,
+        "1) Opened BarSharedMemory with name \"{}\"",
+        shmName_);
     try {
       UnBARableAINS::debug::makeIndentation(std::cout, 1);
-      std::cout << "2) Calling writeUnitData..." << std::endl;
+      SPDLOG_LOGGER_DEBUG(
+          logger,
+          "2) Writing UnitData to shared memory: engine_unit_id={}",
+          unit->GetUnitId());
 
       const auto serializableId = sharedMemory.writeUnitData(unitData);
 
       UnBARableAINS::debug::makeIndentation(std::cout, 1);
-      std::cout << "3) UnitData successfully written. Serializable ID: "
-                << serializableId << std::endl;
+      SPDLOG_LOGGER_DEBUG(
+          logger,
+          "3) Wrote UnitData to shared memory: engine_unit_id={}, serializable_id={}",
+          unit->GetUnitId(),
+          serializableId);
     } catch (const std::exception &exception) {
-      std::cerr << "writeUnitData failed: " << exception.what() << std::endl;
+      SPDLOG_LOGGER_ERROR(
+          logger,
+          "writeUnitData failed for engine_unit_id={}: {}",
+          unit->GetUnitId(),
+          exception.what());
 
       throw;
     } catch (...) {
-      std::cerr << "writeUnitData failed with an unknown exception."
-                << std::endl;
+      SPDLOG_LOGGER_ERROR(
+          logger,
+          "writeUnitData failed for engine_unit_id={} with unknown error",
+          unit->GetUnitId());
 
       throw;
     }
   } catch (const std::system_error &e) {
-    std::cerr << "UnBARableAI::writeObservationToSharedMemory failed: "
-                 "System Error "
-              << e.what() << " when opening the BarSharedMemory." << std::endl;
+    SPDLOG_LOGGER_ERROR(
+        logger,
+        "UnBARableAI::writeObservationToSharedMemory failed: "
+        "System Error "
+        "{} when opening the BarSharedMemory.",
+        e.what());
   } catch (const std::exception &e) {
-    std::cerr << "UnBARableAI::writeObservationToSharedMemory failed: "
-                 "Cannot open BarSharedMemory. Reason: "
-              << e.what() << std::endl;
+    SPDLOG_LOGGER_ERROR(
+        logger,
+        "UnBARableAI::writeObservationToSharedMemory failed: "
+        "Exception {} when opening the BarSharedMemory.",
+        e.what());
 
     try {
       auto path = writeSharedMemoryState();
-      std::cerr << "\tWrote SharedMemory state to file" << path.string()
-                << std::endl;
+      SPDLOG_LOGGER_ERROR(
+          logger,
+          "Shared memory state written to {} for debugging.",
+          path.string());
     } catch (const std::exception &e) {
-      std::cerr << "\tCould not write shared memory state. Reason: " << e.what()
-                << std::endl;
+      SPDLOG_LOGGER_ERROR(
+          logger,
+          "Could not write shared memory state. Reason: {}",
+          e.what());
     }
   }
 }
@@ -402,8 +523,11 @@ int UnBARableAI::registerUnit(int engineUnitId) {
   engineToCustomUnitId_[engineUnitId] = customUnitId;
   customToEngineUnitId_[customUnitId] = engineUnitId;
 
-  std::cout << "Registered unit mapping: engine ID " << engineUnitId
-            << " -> custom ID " << customUnitId << std::endl;
+  SPDLOG_LOGGER_DEBUG(
+      logger,
+      "Registered unit mapping: engine_unit_id={} -> custom_unit_id={}",
+      engineUnitId,
+      customUnitId);
 
   return customUnitId;
 }
