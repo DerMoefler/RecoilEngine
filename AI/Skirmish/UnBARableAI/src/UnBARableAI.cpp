@@ -169,7 +169,7 @@ void UnBARableAI::HandleEvent(int topic, const void *data) {
     if ((event->frame % 2) == 0 && event->frame > 2) {
       SPDLOG_LOGGER_DEBUG(
         logger,
-        "Starting update for frame {}",
+        "-------------------------------------------------------------------Starting update for frame {}-----------------------------------------------------------------------",
         event->frame);
       
       std::vector<springai::Unit *> friendlyUnits = callback_->GetFriendlyUnits();
@@ -179,14 +179,31 @@ void UnBARableAI::HandleEvent(int topic, const void *data) {
       for (springai::Unit *unit : friendlyUnits) {
         writeObservationToSharedMemory(unit);
       }
+      SPDLOG_LOGGER_TRACE(
+        logger,
+        "friendly Units written size: {}",
+        friendlyUnits.size()
+      );
 
       for (springai::Unit *unit : enemyUnits) {
         writeObservationToSharedMemory(unit);
       }
 
+      SPDLOG_LOGGER_TRACE(
+        logger,
+        "enemy Units written size: {}",
+        enemyUnits.size()
+      );
+
       for (springai::Unit *unit : neutralUnits) {
         writeObservationToSharedMemory(unit);
       }
+
+      SPDLOG_LOGGER_TRACE(
+        logger,
+        "neutral Units written size: {}",
+        neutralUnits.size()
+      );
 
       SPDLOG_LOGGER_DEBUG(
         logger,
@@ -338,18 +355,12 @@ void UnBARableAI::writeObservationToSharedMemory(springai::Unit *unit) {
   
   
   if (logger->should_log(spdlog::level::trace)) {
-    UnBARableAINS::debug::makeIndentation(std::cout, 1);
-    SPDLOG_LOGGER_TRACE(
-        logger,
-        "UnitData:");
-    UnBARableAINS::debug::makeIndentation(std::cout, 2);
-
     std::ostringstream dump;
 
     UnBARableAINS::debug::dumpUnitData(
         dump,
         unitData,
-        2);
+        1);
 
     SPDLOG_LOGGER_TRACE(
         logger,
