@@ -27,6 +27,7 @@
 #include "WrappUnit.h"
 #include "memory/debug/hexdump.hpp"
 #include "utility/debug/print_helpers.hpp"
+#include "SkirmishAI.h"
 
 namespace {
 auto logger = spdlog::stdout_color_mt("UnBARableAI");
@@ -56,6 +57,9 @@ void UnBARableAI::HandleEvent(int topic, const void *data) {
     // Initialization event
     pid_t pid = getpid();
     shmName_ = "/sm_proc_" + std::to_string(pid);
+
+    loadConfiguration();
+
     SPDLOG_LOGGER_INFO(
       logger,
       "Received INIT event: team_id={}, pid={}, shared_memory=\"{}\"",
@@ -166,7 +170,9 @@ void UnBARableAI::HandleEvent(int topic, const void *data) {
   }
   case EVENT_UPDATE: {
     const SUpdateEvent *event = static_cast<const SUpdateEvent *>(data);
-    if ((event->frame % 2) == 0 && event->frame > 2) {
+    const bool updateDue = event->frame >= firstUpdateFrame_ && ((event->frame - firstUpdateFrame_) % updateIntervalFrames_ == 0);
+
+    if (updateDue) {
       SPDLOG_LOGGER_DEBUG(
         logger,
         "-------------------------------------------------------------------Starting update for frame {}-----------------------------------------------------------------------",
@@ -291,7 +297,7 @@ void UnBARableAI::HandleEvent(int topic, const void *data) {
         } else {
           springai::AIFloat3 currentPos = unit->GetPos();
           springai::AIFloat3 targetPos = currentPos;
-          float moveDistance = 100.0f;
+          const float moveDistance = moveStepSize_;
           switch (action.action_id) {
           case UnBARableAINS::ActionId::MoveRight: {
             targetPos.x += moveDistance;
@@ -561,4 +567,132 @@ int UnBARableAI::getEngineUnitId(int customUnitId) const {
   }
 
   return unitEntry->second;
+}
+
+#include "SkirmishAI.h"
+#include "OptionValues.h"
+
+#include <algorithm>
+#include <cstddef>
+#include <stdexcept>
+#include <string>
+
+void UnBARableAI::loadConfiguration()
+{
+    springai::SkirmishAI* skirmishAI =
+        callback_->GetSkirmishAI();
+
+    springai::OptionValues* options =
+        skirmishAI->GetOptionValues();
+
+    const auto readString =
+        [options](const std::string& key) -> std::string {
+            const char* value = options->GetValueByKey(key.c_str());
+            return value != nullptr ? std::string{value} : std::string{};
+        };
+
+    const auto readInt =
+        [&readString](
+            const std::string& key,
+            int defaultValue) -> int {
+            const std::string value = readString(key);
+
+            if (value.empty()) {
+                SPDLOG_LOGGER_INFO(
+                    logger,
+                    "AI option '{}' not set; using default {}",
+                    key,
+                    defaultValue);
+
+                return defaultValue;
+            }
+
+            try {
+                std::size_t parsedCharacters = 0;
+
+                const int parsedValue =
+                    std::stoi(value, &parsedCharacters);
+
+                if (parsedCharacters != value.size()) {
+                    throw std::invalid_argument{
+                        "trailing characters"};
+                }
+
+                return parsedValue;
+            } catch (const std::exception& exception) {
+                SPDLOG_LOGGER_WARN(
+                    logger,
+                    "Invalid integer AI option '{}={}': {}. "
+                    "Using default {}",
+                    key,
+                    value,
+                    exception.what(),
+                    defaultValue);
+
+                return defaultValue;
+            }
+        };
+
+    const auto readFloat =
+        [&readString](
+            const std::string& key,
+            float defaultValue) -> float {
+            const std::string value = readString(key);
+
+            if (value.empty()) {
+                SPDLOG_LOGGER_INFO(
+                    logger,
+                    "AI option '{}' not set; using default {}",
+                    key,
+                    defaultValue);
+
+                return defaultValue;
+            }
+
+            try {
+                std::size_t parsedCharacters = 0;
+
+                const float parsedValue =
+                    std::stof(value, &parsedCharacters);
+
+                if (parsedCharacters != value.size()) {
+                    throw std::invalid_argument{
+                        "trailing characters"};
+                }
+
+                return parsedValue;
+            } catch (const std::exception& exception) {
+                SPDLOG_LOGGER_WARN(
+                    logger,
+                    "Invalid floating-point AI option '{}={}': {}. "
+                    "Using default {}",
+                    key,
+                    value,
+                    exception.what(),
+                    defaultValue);
+
+                return defaultValue;
+            }
+        };
+
+    updateIntervalFrames_ = std::max(
+        1,
+        readInt("unbarable_update_interval_frames", 2));
+
+    firstUpdateFrame_ = std::max(
+        0,
+        readInt("unbarable_first_update_frame", 2));
+
+    moveStepSize_ = std::clamp(
+        readFloat("unbarable_move_step_size", 100.0f),
+        1.0f,
+        5000.0f);
+
+    SPDLOG_LOGGER_INFO(
+        logger,
+        "Loaded AI configuration: update_interval_frames={}, "
+        "first_update_frame={}, move_step_size={}",
+        updateIntervalFrames_,
+        firstUpdateFrame_,
+        moveStepSize_);
 }

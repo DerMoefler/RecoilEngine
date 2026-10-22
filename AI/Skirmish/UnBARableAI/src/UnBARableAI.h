@@ -55,6 +55,8 @@ class UnBARableAI {
     int getCustomUnitId(int engineUnitId) const;
     int getEngineUnitId(int customUnitId) const;
 
+    void loadConfiguration();
+
     springai::OOAICallback *callback_;
     int teamId_;
     bool comInUse_ = true;
@@ -67,6 +69,10 @@ class UnBARableAI {
     std::unordered_map<int, int> customToEngineUnitId_;
 
     int nextCustomUnitId_ = 0;
+
+    int updateIntervalFrames_ = 2;
+    int firstUpdateFrame_ = 2;
+    float moveStepSize_ = 100.0f;
 };
 
 #endif // UNBARABLEAI_H

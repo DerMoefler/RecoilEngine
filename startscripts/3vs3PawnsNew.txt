@@ -45,6 +45,13 @@
 		ShortName = "UnBARableAI";
 		Team = 0;
 		Version = stable;
+		
+		[Options]
+		{
+			unbarable_update_interval_frames = 2;
+			unbarable_move_step_size = 100.0;
+			unbarable_first_update_frame = 2;
+		}
 	}
 	
 	[ai1] 
