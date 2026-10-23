@@ -102,7 +102,7 @@ void UnBARableAI::HandleEvent(int topic, const void *data) {
         serializableId);
 
     UnBARableAIClient client = UnBARableAIClient();
-    if (!client.HandleEventUpdate()) {
+    if (!client.HandleEventUpdate(30000)) {
       SPDLOG_LOGGER_ERROR(
         logger,
         "Failed to send event update: {}",
@@ -225,11 +225,11 @@ void UnBARableAI::HandleEvent(int topic, const void *data) {
           sharedMemory.writeEngineStatus(UnBARableAINS::EngineStatus::RUNNING);
       SPDLOG_LOGGER_TRACE(
         logger,
-        "Engine status written: serializable_id={}",
+        "Engine status written: running,  serializable_id={}",
         serializableId);
 
       UnBARableAIClient client = UnBARableAIClient();
-      if (!client.HandleEventUpdate()) {
+      if (!client.HandleEventUpdate(30000)) {
         SPDLOG_LOGGER_ERROR(
           logger,
           "Frame {} event update failed: {}",
