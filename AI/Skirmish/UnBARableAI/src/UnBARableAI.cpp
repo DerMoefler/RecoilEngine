@@ -81,14 +81,22 @@ void UnBARableAI::HandleEvent(int topic, const void *data) {
      * 7: other reason
      **/
     const SReleaseEvent *event = static_cast<const SReleaseEvent *>(data);
-    const int reason = event->reason;
-    if (reason < 0 || reason > 7) {
-      SPDLOG_LOGGER_ERROR(
+    int reason = event->reason;
+    if (reason < -1 || reason > 7) {
+      SPDLOG_LOGGER_WARN(
         logger,
         "EVENT_RELEASE received invalid reason code {}",
         reason);
-      break;
+      reason = 0; // default to unspecified
     }
+
+    if (reason == -1) {
+      SPDLOG_LOGGER_INFO(
+        logger,
+        "EVENT_RELEASE received reason code -1, I think it means we won the game");
+      reason = 1;
+    }
+
     const auto status = static_cast<UnBARableAINS::EngineStatus>(reason);
 
     auto sharedMemory =
