@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "UnBARableAI/unit_data.h"
+#include "UnBARableAI/engine_status.h"
 
 class UnBARableAI {
   public:
@@ -33,7 +34,9 @@ class UnBARableAI {
     using UnitData = UnBARableAINS::unit::UnitData;
 
   private:
-    void writeObservationToSharedMemory(springai::Unit *unit);
+    void finishEpisode(UnBARableAINS::EngineStatus status, const std::string& reason);
+    void writeObservationToSharedMemory();
+    void writeUnitToSharedMemory(springai::Unit *unit);
 
     UnitData getUnitData(springai::Unit *unit);
 
@@ -68,8 +71,9 @@ class UnBARableAI {
     // Eigene Unit ID -> Engine Unit ID
     std::unordered_map<int, int> customToEngineUnitId_;
 
+    bool gameOver_ = false;
     int nextCustomUnitId_ = 0;
-
+    int currentFrame_ = -1;
     int updateIntervalFrames_ = 2;
     int firstUpdateFrame_ = 2;
     float moveStepSize_ = 100.0f;

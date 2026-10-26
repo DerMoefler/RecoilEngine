@@ -21,7 +21,6 @@
 #include "UnBARableAI/bar_shared_memory.h"
 #include "UnBARableAI/debug/dump_action.hpp"
 #include "UnBARableAI/debug/dump_unit_data.hpp"
-#include "UnBARableAI/engine_status.h"
 #include "Unit.h"
 #include "UnitDef.h"
 #include "WrappUnit.h"
@@ -66,60 +65,6 @@ void UnBARableAI::HandleEvent(int topic, const void *data) {
       teamId_,
       pid,
       shmName_);
-    break;
-  }
-  case EVENT_RELEASE: {
-    /**
-     * Values description for reason:
-     * 0: unspecified
-     * 1: game ended
-     * 2: team died
-     * 3: AI killed
-     * 4: AI crashed
-     * 5: AI failed to init
-     * 6: connection lost
-     * 7: other reason
-     **/
-    const SReleaseEvent *event = static_cast<const SReleaseEvent *>(data);
-    int reason = event->reason;
-    if (reason < -1 || reason > 7) {
-      SPDLOG_LOGGER_WARN(
-        logger,
-        "EVENT_RELEASE received invalid reason code {}",
-        reason);
-      reason = 0; // default to unspecified
-    }
-
-    if (reason == -1) {
-      SPDLOG_LOGGER_INFO(
-        logger,
-        "EVENT_RELEASE received reason code -1, I think it means we won the game");
-      reason = 1;
-    }
-
-    const auto status = static_cast<UnBARableAINS::EngineStatus>(reason);
-
-    auto sharedMemory =
-        UnBARableAINS::memory::BarSharedMemory::open(shmName_);
-    const auto serializableId = sharedMemory.writeEngineStatus(status);
-
-    SPDLOG_LOGGER_INFO(
-        logger,
-        "EVENT_RELEASE wrote engine status: reason={}, serializable_id={}",
-        reason,
-        serializableId);
-
-    UnBARableAIClient client = UnBARableAIClient();
-    if (!client.HandleEventUpdate(30000)) {
-      SPDLOG_LOGGER_ERROR(
-        logger,
-        "Failed to send event update: {}",
-        client.GetLastError());
-    } else {
-      SPDLOG_LOGGER_INFO(
-        logger,
-        "Release event update sent successfully");
-    }
     break;
   }
   case EVENT_UNIT_CREATED: {
@@ -176,56 +121,144 @@ void UnBARableAI::HandleEvent(int topic, const void *data) {
     }
     break;
   }
+
+  case EVENT_LUA_MESSAGE: {
+    const auto* event =
+        static_cast<const SLuaMessageEvent*>(data);
+
+    if (event == nullptr || event->inData == nullptr) {
+        SPDLOG_LOGGER_WARN(
+            logger,
+            "Received empty EVENT_LUA_MESSAGE");
+        break;
+    }
+
+    const std::string message{event->inData};
+
+    SPDLOG_LOGGER_INFO(
+        logger,
+        "Received Lua message: {}",
+        message);
+
+    constexpr std::string_view prefix =
+        "UNBARABLE_GAME_OVER;";
+
+    if (!message.starts_with(prefix)) {
+        break;
+    }
+
+    if (gameOver_) {
+        SPDLOG_LOGGER_DEBUG(
+            logger,
+            "Ignoring duplicate game-over message: {}",
+            message);
+
+        break;
+    }
+
+    const bool won =
+        message.find(";result=win;") != std::string::npos;
+
+    const bool lost =
+        message.find(";result=loss;") != std::string::npos;
+
+    if (!won && !lost) {
+        SPDLOG_LOGGER_ERROR(
+            logger,
+            "Invalid game-over message: {}",
+            message);
+
+        break;
+    }
+
+    SPDLOG_LOGGER_INFO(
+        logger,
+        "Authoritative game result received: "
+        "result={}, current_frame={}, message={}",
+        won ? "win" : "loss",
+        currentFrame_,
+        message);
+
+    if (won) {
+        finishEpisode(
+            UnBARableAINS::EngineStatus::GAME_ENDED,
+            message);
+    } else {
+        finishEpisode(
+            UnBARableAINS::EngineStatus::TEAM_DIED,
+            message);
+    }
+
+    break;
+  }
+  case EVENT_RELEASE: {
+    const auto* event =
+        static_cast<const SReleaseEvent*>(data);
+
+    const int releaseReason =
+        event != nullptr
+            ? event->reason
+            : 0;
+
+    SPDLOG_LOGGER_INFO(
+        logger,
+        "EVENT_RELEASE received: "
+        "reason={}, game_over={}, "
+        "current_frame={}",
+        releaseReason,
+        gameOver_,
+        currentFrame_);
+
+    if (!gameOver_) {
+        SPDLOG_LOGGER_WARN(
+            logger,
+            "EVENT_RELEASE received before game-over message. "
+            "Writing terminal loss observation at frame {}. "
+            "Release reason={}",
+            currentFrame_,
+            releaseReason);
+
+        finishEpisode(
+            UnBARableAINS::EngineStatus::TEAM_DIED,
+            "release_fallback"
+            ";frame=" + std::to_string(currentFrame_)
+            + ";release_reason=" + std::to_string(releaseReason));
+    } else {
+        SPDLOG_LOGGER_INFO(
+            logger,
+            "Episode already finished. "
+            "EVENT_RELEASE performs cleanup only.");
+    }
+
+    
+    engineToCustomUnitId_.clear();
+    customToEngineUnitId_.clear();
+
+    SPDLOG_LOGGER_DEBUG(
+        logger,
+        "EVENT_RELEASE cleanup completed");
+
+    break;
+  }
   case EVENT_UPDATE: {
     const SUpdateEvent *event = static_cast<const SUpdateEvent *>(data);
-    const bool updateDue = event->frame >= firstUpdateFrame_ && ((event->frame - firstUpdateFrame_) % updateIntervalFrames_ == 0);
+    currentFrame_ = event->frame;
+    const bool updateDue = currentFrame_ >= firstUpdateFrame_ && ((currentFrame_ - firstUpdateFrame_) % updateIntervalFrames_ == 0);
 
     if (updateDue) {
       SPDLOG_LOGGER_DEBUG(
         logger,
         "-------------------------------------------------------------------Starting update for frame {}-----------------------------------------------------------------------",
-        event->frame);
+        currentFrame_);
+
+      if (gameOver_) {
+        SPDLOG_LOGGER_INFO(
+          logger,
+          "EVENT_UPDATE called when Game Over: No Observation written");
+        break;
+      }
       
-      std::vector<springai::Unit *> friendlyUnits = callback_->GetFriendlyUnits();
-      std::vector<springai::Unit *> enemyUnits = callback_->GetEnemyUnitsInRadarAndLos();
-      std::vector<springai::Unit *> neutralUnits = callback_->GetNeutralUnits();
-
-      for (springai::Unit *unit : friendlyUnits) {
-        writeObservationToSharedMemory(unit);
-      }
-      SPDLOG_LOGGER_TRACE(
-        logger,
-        "friendly Units written size: {}",
-        friendlyUnits.size()
-      );
-
-      for (springai::Unit *unit : enemyUnits) {
-        writeObservationToSharedMemory(unit);
-      }
-
-      SPDLOG_LOGGER_TRACE(
-        logger,
-        "enemy Units written size: {}",
-        enemyUnits.size()
-      );
-
-      for (springai::Unit *unit : neutralUnits) {
-        writeObservationToSharedMemory(unit);
-      }
-
-      SPDLOG_LOGGER_TRACE(
-        logger,
-        "neutral Units written size: {}",
-        neutralUnits.size()
-      );
-
-      SPDLOG_LOGGER_DEBUG(
-        logger,
-        "Frame {} observations written: friendly={}, enemy={}, neutral={}",
-        event->frame,
-        friendlyUnits.size(),
-        enemyUnits.size(),
-        neutralUnits.size());
+      writeObservationToSharedMemory();
 
       auto sharedMemory =
           UnBARableAINS::memory::BarSharedMemory::open(shmName_);
@@ -241,13 +274,13 @@ void UnBARableAI::HandleEvent(int topic, const void *data) {
         SPDLOG_LOGGER_ERROR(
           logger,
           "Frame {} event update failed: {}",
-          event->frame,
+          currentFrame_,
           client.GetLastError());
       } else {
         SPDLOG_LOGGER_DEBUG(
           logger,
           "Frame {} event update sent successfully",
-          event->frame);
+          currentFrame_);
       }
 
       sharedMemory =
@@ -258,7 +291,7 @@ void UnBARableAI::HandleEvent(int topic, const void *data) {
       SPDLOG_LOGGER_DEBUG(
         logger,
         "Frame {} received {} actions",
-        event->frame,
+        currentFrame_,
         actions.size());
       
       for (const UnBARableAINS::Action &action : actions) {
@@ -341,7 +374,7 @@ void UnBARableAI::HandleEvent(int topic, const void *data) {
       SPDLOG_LOGGER_DEBUG(
         logger,
         "Finished update for frame {}",
-        event->frame);
+        currentFrame_);
     }
     break;
   }
@@ -350,7 +383,155 @@ void UnBARableAI::HandleEvent(int topic, const void *data) {
   }
 }
 
-void UnBARableAI::writeObservationToSharedMemory(springai::Unit *unit) {
+void UnBARableAI::finishEpisode(
+    UnBARableAINS::EngineStatus status,
+    const std::string& reason)
+{
+    if (gameOver_) {
+        SPDLOG_LOGGER_WARN(
+            logger,
+            "Ignoring duplicate episode end: "
+            "current_frame={}, "
+            "status={}, reason=\"{}\"",
+            currentFrame_,
+            static_cast<int>(status),
+            reason);
+        return;
+    }
+
+
+    SPDLOG_LOGGER_INFO(
+        logger,
+        "Finishing episode: frame={}, status={}, reason=\"{}\"",
+        currentFrame_,
+        static_cast<int>(status),
+        reason);
+
+    try {
+        writeObservationToSharedMemory();
+    } catch (const std::exception& exception) {
+        SPDLOG_LOGGER_ERROR(
+            logger,
+            "Failed to write terminal observation at frame {}: {}",
+            currentFrame_,
+            exception.what());
+    } catch (...) {
+        SPDLOG_LOGGER_ERROR(
+            logger,
+            "Failed to write terminal observation at frame {} "
+            "with unknown exception",
+            currentFrame_);
+    }
+
+    
+    gameOver_ = true;
+
+    try {
+        auto sharedMemory =
+            UnBARableAINS::memory::BarSharedMemory::open(shmName_);
+
+        const auto serializableId =
+            sharedMemory.writeEngineStatus(status);
+
+        SPDLOG_LOGGER_INFO(
+            logger,
+            "Terminal engine status written: "
+            "frame={}, status={}, reason=\"{}\", serializable_id={}",
+            currentFrame_,
+            static_cast<int>(status),
+            reason,
+            serializableId);
+    } catch (const std::exception& exception) {
+        SPDLOG_LOGGER_ERROR(
+            logger,
+            "Failed to write terminal engine status: "
+            "frame={}, status={}, reason=\"{}\", error={}",
+            currentFrame_,
+            static_cast<int>(status),
+            reason,
+            exception.what());
+
+        return;
+    } catch (...) {
+        SPDLOG_LOGGER_ERROR(
+            logger,
+            "Failed to write terminal engine status: "
+            "frame={}, status={}, reason=\"{}\", unknown error",
+            currentFrame_,
+            static_cast<int>(status),
+            reason);
+
+        return;
+    }
+
+    UnBARableAIClient client;
+
+    if (!client.HandleEventUpdate(30000)) {
+        SPDLOG_LOGGER_ERROR(
+            logger,
+            "Failed to send terminal event update: "
+            "frame={}, status={}, reason=\"{}\", error={}",
+            currentFrame_,
+            static_cast<int>(status),
+            reason,
+            client.GetLastError());
+
+        return;
+    }
+
+    SPDLOG_LOGGER_INFO(
+        logger,
+        "Terminal event update sent successfully: "
+        "frame={}, status={}, reason=\"{}\"",
+        currentFrame_,
+        static_cast<int>(status),
+        reason);
+}
+
+
+void UnBARableAI::writeObservationToSharedMemory() {
+  std::vector<springai::Unit *> friendlyUnits = callback_->GetFriendlyUnits();
+  std::vector<springai::Unit *> enemyUnits = callback_->GetEnemyUnitsInRadarAndLos();
+  std::vector<springai::Unit *> neutralUnits = callback_->GetNeutralUnits();
+
+  for (springai::Unit *unit : friendlyUnits) {
+    writeUnitToSharedMemory(unit);
+  }
+  SPDLOG_LOGGER_TRACE(
+    logger,
+    "friendly Units written size: {}",
+    friendlyUnits.size()
+  );
+
+  for (springai::Unit *unit : enemyUnits) {
+    writeUnitToSharedMemory(unit);
+  }
+
+  SPDLOG_LOGGER_TRACE(
+    logger,
+    "enemy Units written size: {}",
+    enemyUnits.size()
+  );
+
+  for (springai::Unit *unit : neutralUnits) {
+    writeUnitToSharedMemory(unit);
+  }
+
+  SPDLOG_LOGGER_TRACE(
+    logger,
+    "neutral Units written size: {}",
+    neutralUnits.size()
+  );
+
+  SPDLOG_LOGGER_DEBUG(
+    logger,
+    "observations written: friendly={}, enemy={}, neutral={}",
+    friendlyUnits.size(),
+    enemyUnits.size(),
+    neutralUnits.size());
+}
+
+void UnBARableAI::writeUnitToSharedMemory(springai::Unit *unit) {
   UnitData unitData{};
   try {
     unitData = getUnitData(unit);
@@ -425,14 +606,14 @@ void UnBARableAI::writeObservationToSharedMemory(springai::Unit *unit) {
   } catch (const std::system_error &e) {
     SPDLOG_LOGGER_ERROR(
         logger,
-        "UnBARableAI::writeObservationToSharedMemory failed: "
+        "UnBARableAI::writeUnitToSharedMemory failed: "
         "System Error "
         "{} when opening the BarSharedMemory.",
         e.what());
   } catch (const std::exception &e) {
     SPDLOG_LOGGER_ERROR(
         logger,
-        "UnBARableAI::writeObservationToSharedMemory failed: "
+        "UnBARableAI::writeUnitToSharedMemory failed: "
         "Exception {} when opening the BarSharedMemory.",
         e.what());
 
