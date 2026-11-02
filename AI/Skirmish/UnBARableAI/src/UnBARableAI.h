@@ -8,6 +8,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "UnBARableAI/bar_shared_memory.h"
 #include "UnBARableAI/engine_status.h"
 #include "UnBARableAI/unit_data.h"
 
@@ -38,21 +39,31 @@ class UnBARableAI {
     /// \brief Type Alias for UnitData.
     using UnitData = UnBARableAINS::unit::UnitData;
 
+    /// \brief Type alias for BarSharedMemory.
+    using BarSharedMemory = UnBARableAINS::memory::BarSharedMemory;
+
+    /// \brief Type alias for EngineStatus.
+    using EngineStatus = UnBARableAINS::EngineStatus;
+
   private:
     /// \brief Shm name consists of this base name + the process id.
     static constexpr std::string_view c_shm_base_name = "/sm_proc";
 
     /**
-     * \brief Initializes \ref shmName_ using \ref c_shm_base_name and the
-     * process id.
+     * \brief Initializes \ref shm_ using \ref c_shm_base_name and the
+     * process id for the name.
      */
-    void initShmName(void);
+    static std::string getShmName(void);
+
+    void updateEngineStatus(
+        const EngineStatus status,
+        const std::optional<std::string_view> reason = std::nullopt);
 
     /**
      * \brief Implementation for the topic "EVENT_INIT".
      * \param data Data passed to \ref HandleEvent.
      *
-     * Calls \ref loadConfiguration.
+     * Calls \ref loadConfiguration and sets the EngineStatus to running.
      */
     void eventInit(const void *data);
 
@@ -93,6 +104,8 @@ class UnBARableAI {
      * its mapping from engine to custom id and vice versa.
      */
     void eventRelease(const void *data);
+
+    void eventUpdate(const void *data);
 
     /**
      * \brief Finishes an episode by writing one last observation and waiting
@@ -140,7 +153,7 @@ class UnBARableAI {
     springai::OOAICallback *callback_;
     int teamId_;
     bool comInUse_ = true;
-    std::string shmName_;
+    BarSharedMemory shm_;
 
     // Engine Unit ID -> eigene fortlaufende Unit ID
     std::unordered_map<int, int> engineToCustomUnitId_;

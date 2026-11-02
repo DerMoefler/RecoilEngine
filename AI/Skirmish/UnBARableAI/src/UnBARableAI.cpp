@@ -19,7 +19,6 @@
 #include "SkirmishAI.h"
 #include "UnBARableAI/UnBARableAIClient.h"
 #include "UnBARableAI/action.h"
-#include "UnBARableAI/bar_shared_memory.h"
 #include "UnBARableAI/debug/dump_action.hpp"
 #include "UnBARableAI/debug/dump_unit_data.hpp"
 #include "Unit.h"
@@ -40,10 +39,9 @@ ConfigureLogger configureLogger;
 } // namespace
 
 UnBARableAI::UnBARableAI(springai::OOAICallback *callback)
-    : callback_(callback) {
+    : callback_(callback), shm_(BarSharedMemory::open(getShmName())) {
     teamId_ = callback_->GetSkirmishAIId();
     srand(time(NULL));
-    initShmName();
 }
 
 UnBARableAI::~UnBARableAI(void) {
@@ -198,9 +196,36 @@ void UnBARableAI::HandleEvent(int topic, const void *data) {
     }
 }
 
-void UnBARableAI::initShmName(void) {
+std::string UnBARableAI::getShmName(void) {
     pid_t pid = getpid();
-    shmName_ = std::string(c_shm_base_name) + std::to_string(pid);
+    return std::string(c_shm_base_name) + std::to_string(pid);
+}
+
+void UnBARableAI::updateEngineStatus(
+    const EngineStatus status, const std::optional<std::string_view> reason) {
+    const std::string_view actualReason = reason.value_or("Not specified");
+    try {
+        shm_.updateEngineStatus(status);
+        SPDLOG_LOGGER_INFO(logger,
+                           "Engine status updated: "
+                           "frame={}, status={}, reason=\"{}\"",
+                           currentFrame_, static_cast<int>(status),
+                           actualReason);
+    } catch (const std::exception &exception) {
+        SPDLOG_LOGGER_ERROR(logger,
+                            "Failed to update to engine status: "
+                            "frame={}, status={}, reason=\"{}\", error={}",
+                            currentFrame_, static_cast<int>(status),
+                            actualReason, exception.what());
+        return;
+    } catch (...) {
+        SPDLOG_LOGGER_ERROR(logger,
+                            "Failed to update to engine status: "
+                            "frame={}, status={}, reason=\"{}\", unknown error",
+                            currentFrame_, static_cast<int>(status),
+                            actualReason);
+        return;
+    }
 }
 
 void UnBARableAI::eventInit(const void *data) {
@@ -208,7 +233,8 @@ void UnBARableAI::eventInit(const void *data) {
 
     SPDLOG_LOGGER_INFO(logger,
                        "Received INIT event: team_id={}, shared_memory=\"{}\"",
-                       teamId_, shmName_);
+                       teamId_, shm_.getName());
+    updateEngineStatus(EngineStatus::RUNNING);
 }
 
 void UnBARableAI::eventUnitCreated(const void *data) {
@@ -362,28 +388,7 @@ void UnBARableAI::finishEpisode(const UnBARableAINS::EngineStatus status,
 
     gameOver_ = true;
 
-    try {
-        auto sharedMemory =
-            UnBARableAINS::memory::BarSharedMemory::open(shmName_);
-        sharedMemory.updateEngineStatus(status);
-        SPDLOG_LOGGER_INFO(logger,
-                           "Terminal engine status updated: "
-                           "frame={}, status={}, reason=\"{}\"",
-                           currentFrame_, static_cast<int>(status), reason);
-    } catch (const std::exception &exception) {
-        SPDLOG_LOGGER_ERROR(logger,
-                            "Failed to update to terminal engine status: "
-                            "frame={}, status={}, reason=\"{}\", error={}",
-                            currentFrame_, static_cast<int>(status), reason,
-                            exception.what());
-        return;
-    } catch (...) {
-        SPDLOG_LOGGER_ERROR(logger,
-                            "Failed to update to terminal engine status: "
-                            "frame={}, status={}, reason=\"{}\", unknown error",
-                            currentFrame_, static_cast<int>(status), reason);
-        return;
-    }
+    updateEngineStatus(status, reason);
 
     UnBARableAIClient client;
 
@@ -556,7 +561,7 @@ std::filesystem::path UnBARableAI::writeSharedMemoryState(void) const {
                                      filename.string() + "'"};
     }
 
-    std::string shmName{shmName_};
+    auto shmName = shm_.getName();
     if (!shmName.empty() && shmName.front() == '/') {
         shmName.erase(0, 1);
     }
