@@ -18,10 +18,8 @@
 #include "Resource.h"
 #include "SkirmishAI.h"
 #include "UnBARableAI/UnBARableAIClient.h"
-#include "UnBARableAI/action.h"
 #include "UnBARableAI/debug/dump_action.hpp"
 #include "UnBARableAI/debug/dump_unit_data.hpp"
-#include "Unit.h"
 #include "UnitDef.h"
 #include "WrappUnit.h"
 #include "memory/debug/hexdump.hpp"
@@ -71,124 +69,7 @@ void UnBARableAI::HandleEvent(int topic, const void *data) {
         break;
     }
     case EVENT_UPDATE: {
-        const SUpdateEvent *event = static_cast<const SUpdateEvent *>(data);
-        currentFrame_ = event->frame;
-        const bool updateDue =
-            currentFrame_ >= firstUpdateFrame_ &&
-            ((currentFrame_ - firstUpdateFrame_) % updateIntervalFrames_ == 0);
-
-        if (updateDue) {
-            SPDLOG_LOGGER_DEBUG(
-                logger,
-                "--------------------------------------------------------------"
-                "-----Starting update for frame "
-                "{}------------------------------------------------------------"
-                "-----------",
-                currentFrame_);
-
-            if (gameOver_) {
-                SPDLOG_LOGGER_INFO(logger, "EVENT_UPDATE called when Game "
-                                           "Over: No Observation written");
-                break;
-            }
-
-            writeObservationToSharedMemory();
-
-            auto sharedMemory =
-                UnBARableAINS::memory::BarSharedMemory::open(shmName_);
-            const auto serializableId = sharedMemory.writeEngineStatus(
-                UnBARableAINS::EngineStatus::RUNNING);
-            SPDLOG_LOGGER_TRACE(
-                logger, "Engine status written: running,  serializable_id={}",
-                serializableId);
-
-            UnBARableAIClient client = UnBARableAIClient();
-            if (!client.HandleEventUpdate(30000)) {
-                SPDLOG_LOGGER_ERROR(logger, "Frame {} event update failed: {}",
-                                    currentFrame_, client.GetLastError());
-            } else {
-                SPDLOG_LOGGER_DEBUG(logger,
-                                    "Frame {} event update sent successfully",
-                                    currentFrame_);
-            }
-
-            sharedMemory =
-                UnBARableAINS::memory::BarSharedMemory::open(shmName_);
-            std::vector<UnBARableAINS::Action> actions =
-                sharedMemory.readAll<UnBARableAINS::Action>();
-
-            SPDLOG_LOGGER_DEBUG(logger, "Frame {} received {} actions",
-                                currentFrame_, actions.size());
-
-            for (const UnBARableAINS::Action &action : actions) {
-                if (logger->should_log(spdlog::level::trace)) {
-                    std::ostringstream dump;
-
-                    UnBARableAINS::debug::dumpAction(dump, action, 1);
-
-                    SPDLOG_LOGGER_TRACE(logger, "Received action:\n{}",
-                                        dump.str());
-                }
-                int engineUnitId = getEngineUnitId(action.unit_id);
-                if (engineUnitId == -1) {
-                    SPDLOG_LOGGER_ERROR(
-                        logger, "No engine unit ID for custom unit ID {}",
-                        action.unit_id);
-                    continue;
-                }
-                springai::Unit *unit = springai::WrappUnit::GetInstance(
-                    action.team_id, engineUnitId);
-                if (action.action_id == UnBARableAINS::ActionId::Attack) {
-                    const int engineTargetUnitId =
-                        getEngineUnitId(action.target_unit_id);
-                    if (engineTargetUnitId == -1) {
-                        SPDLOG_LOGGER_ERROR(logger,
-                                            "No engine unit ID found for "
-                                            "target custom unit ID {}",
-                                            action.target_unit_id);
-                        continue;
-                    }
-                    springai::Unit *enemyUnit =
-                        springai::WrappUnit::GetInstance(action.team_id,
-                                                         engineTargetUnitId);
-                    unit->Attack(enemyUnit);
-                    SPDLOG_LOGGER_DEBUG(logger, "Unit {} attacks unit {}",
-                                        action.unit_id, action.target_unit_id);
-                } else {
-                    springai::AIFloat3 currentPos = unit->GetPos();
-                    springai::AIFloat3 targetPos = currentPos;
-                    const float moveDistance = moveStepSize_;
-                    switch (action.action_id) {
-                    case UnBARableAINS::ActionId::MoveRight: {
-                        targetPos.x += moveDistance;
-                        break;
-                    }
-                    case UnBARableAINS::ActionId::MoveLeft: {
-                        targetPos.x -= moveDistance;
-                        break;
-                    }
-                    case UnBARableAINS::ActionId::MoveUp: {
-                        targetPos.z += moveDistance;
-                        break;
-                    }
-                    case UnBARableAINS::ActionId::MoveDown: {
-                        targetPos.z -= moveDistance;
-                        break;
-                    }
-                    case UnBARableAINS::ActionId::Attack: {
-                        // Already handled above
-                        break;
-                    }
-                    }
-                    unit->MoveTo(targetPos);
-                    SPDLOG_LOGGER_DEBUG(logger, "Unit {} moves to ({}, {}, {})",
-                                        action.unit_id, targetPos.x,
-                                        targetPos.y, targetPos.z);
-                }
-            }
-            SPDLOG_LOGGER_DEBUG(logger, "Finished update for frame {}",
-                                currentFrame_);
-        }
+        eventUpdate(data);
         break;
     }
     default:
@@ -359,6 +240,162 @@ void UnBARableAI::eventRelease(const void *data) {
     customToEngineUnitId_.clear();
 
     SPDLOG_LOGGER_DEBUG(logger, "EVENT_RELEASE cleanup completed");
+}
+
+void UnBARableAI::eventUpdate(const void *data) {
+    const SUpdateEvent *event = static_cast<const SUpdateEvent *>(data);
+    currentFrame_ = event->frame;
+    const bool updateDue =
+        currentFrame_ >= firstUpdateFrame_ &&
+        ((currentFrame_ - firstUpdateFrame_) % updateIntervalFrames_ == 0);
+
+    if (updateDue) {
+        if (gameOver_) {
+            SPDLOG_LOGGER_INFO(logger, "EVENT_UPDATE called when Game "
+                                       "Over: No Observation written");
+            return;
+        }
+
+        SPDLOG_LOGGER_DEBUG(
+            logger,
+            "--------------------------------------------------------------"
+            "-----Starting update for frame "
+            "{}------------------------------------------------------------"
+            "-----------",
+            currentFrame_);
+
+        writeObservationToSharedMemory();
+
+        // Call python side
+        UnBARableAIClient client = UnBARableAIClient();
+        if (!client.HandleEventUpdate(30000)) {
+            SPDLOG_LOGGER_ERROR(logger, "Frame {} event update failed: {}",
+                                currentFrame_, client.GetLastError());
+        } else {
+            SPDLOG_LOGGER_DEBUG(logger,
+                                "Frame {} event update sent successfully",
+                                currentFrame_);
+        }
+
+        const auto actions = shm_.readAll<ActionOpt>();
+
+        SPDLOG_LOGGER_DEBUG(logger, "Frame {} received {} actions",
+                            currentFrame_, actions.size());
+
+        for (const auto &a : actions) {
+            if (!a.has_value()) {
+                SPDLOG_LOGGER_DEBUG(logger, "Empty action received");
+                continue;
+            }
+            const auto &action = a.value();
+
+            executeAction(action);
+        }
+    }
+    SPDLOG_LOGGER_DEBUG(logger, "Finished update for frame {}", currentFrame_);
+}
+
+void UnBARableAI::executeAction(const Action &action) {
+    if (logger->should_log(spdlog::level::trace)) {
+        std::ostringstream dump;
+        UnBARableAINS::debug::dumpAction(dump, action, 1);
+        SPDLOG_LOGGER_TRACE(logger, "Received action:\n{}", dump.str());
+    }
+
+    const uint32_t customUnitId = action.unit_id;
+    // TODO possibly refactor into function so e.g. executeActionAttack can use
+    // it.
+    const auto engineUnitIdOpt = getEngineUnitId(customUnitId);
+    if (!engineUnitIdOpt.has_value()) {
+        SPDLOG_LOGGER_ERROR(logger, "No engine unit ID for custom unit ID {}",
+                            action.unit_id);
+        return;
+    }
+    const int engineUnitId = engineUnitIdOpt.value();
+    springai::Unit *unit =
+        springai::WrappUnit::GetInstance(action.team_id, engineUnitId);
+    if (!unit) {
+        SPDLOG_LOGGER_ERROR(logger,
+                            "Custom unit ID {} maps to engine unit ID {}, "
+                            "which does not actually exist.",
+                            customUnitId, engineUnitId);
+        return;
+    }
+
+    switch (action.action_id) {
+    case ActionId::Attack: {
+        executeActionAttack(unit, customUnitId, action.team_id,
+                            action.target_unit_id);
+        break;
+    }
+    default: {
+        executeActionMove(unit, customUnitId, action.action_id);
+    }
+    }
+}
+
+void UnBARableAI::executeActionAttack(springai::Unit *unit,
+                                      const uint32_t unitId,
+                                      const uint32_t targetTeamId,
+                                      const uint32_t targetUnitId) {
+    if (!unit) {
+        SPDLOG_LOGGER_CRITICAL(logger, "Do not call with unit=nullptr");
+        return;
+    }
+    const auto engineTargetUnitIdOpt = getEngineUnitId(targetUnitId);
+    if (!engineTargetUnitIdOpt.has_value()) {
+        SPDLOG_LOGGER_ERROR(logger,
+                            "No engine unit ID found for "
+                            "target custom unit ID {}",
+                            targetUnitId);
+        return;
+    }
+
+    const int engineTargetUnitId = engineTargetUnitIdOpt.value();
+    springai::Unit *enemyUnit =
+        springai::WrappUnit::GetInstance(targetTeamId, engineTargetUnitId);
+    unit->Attack(enemyUnit);
+    SPDLOG_LOGGER_DEBUG(logger, "Unit {} attacks unit {}", unitId,
+                        targetUnitId);
+}
+
+void UnBARableAI::executeActionMove(springai::Unit *unit, const uint32_t unitId,
+                                    const ActionId moveAction) {
+    if (!unit) {
+        SPDLOG_LOGGER_CRITICAL(logger, "Do not call with unit=nullptr");
+        return;
+    }
+
+    springai::AIFloat3 currentPos = unit->GetPos();
+    springai::AIFloat3 targetPos = currentPos;
+    const auto moveDistance = moveStepSize_;
+
+    switch (moveAction) {
+    case ActionId::MoveUp: {
+        targetPos.z += moveDistance;
+        break;
+    }
+    case ActionId::MoveRight: {
+        targetPos.x += moveDistance;
+        break;
+    }
+
+    case ActionId::MoveDown: {
+        targetPos.z -= moveDistance;
+        break;
+    }
+    case UnBARableAINS::ActionId::MoveLeft: {
+        targetPos.x -= moveDistance;
+        break;
+    }
+    default: {
+        SPDLOG_LOGGER_CRITICAL(logger, "Called with invalid action {}",
+                               static_cast<int>(moveAction));
+    }
+    }
+    unit->MoveTo(targetPos);
+    SPDLOG_LOGGER_DEBUG(logger, "Unit {} moves to ({}, {}, {})", unitId,
+                        targetPos.x, targetPos.y, targetPos.z);
 }
 
 void UnBARableAI::finishEpisode(const UnBARableAINS::EngineStatus status,

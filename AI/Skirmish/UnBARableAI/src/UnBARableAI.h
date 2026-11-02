@@ -2,12 +2,16 @@
 #define UNBARABLEAI_H
 
 #include "OOAICallback.h"
+#include "Unit.h"
+
+#include <cstdint>
 #include <filesystem>
 #include <optional>
 #include <string_view>
 #include <unordered_map>
 #include <vector>
 
+#include "UnBARableAI/action.h"
 #include "UnBARableAI/bar_shared_memory.h"
 #include "UnBARableAI/engine_status.h"
 #include "UnBARableAI/unit_data.h"
@@ -36,16 +40,25 @@ class UnBARableAI {
      */
     void HandleEvent(int topic, const void *data);
 
-    /// \brief Type Alias for UnitData.
-    using UnitData = UnBARableAINS::unit::UnitData;
-
+  private:
     /// \brief Type alias for BarSharedMemory.
     using BarSharedMemory = UnBARableAINS::memory::BarSharedMemory;
+
+    /// \brief Type alias for UnitData.
+    using UnitData = UnBARableAINS::unit::UnitData;
+
+    /// \brief Type alias for Action.
+    using Action = UnBARableAINS::Action;
+
+    /// \brief Type alias for ActionOpt.
+    using ActionOpt = BarSharedMemory::ActionOpt;
+
+    // \brief Type alias for ActionId.
+    using ActionId = UnBARableAINS::ActionId;
 
     /// \brief Type alias for EngineStatus.
     using EngineStatus = UnBARableAINS::EngineStatus;
 
-  private:
     /// \brief Shm name consists of this base name + the process id.
     static constexpr std::string_view c_shm_base_name = "/sm_proc";
 
@@ -112,7 +125,49 @@ class UnBARableAI {
      */
     void eventRelease(const void *data);
 
+    /**
+     * \brief Implementation for the topic "EVENT_UPDATE".
+     * \param data Data passed to \ref HandleEvent.
+     *
+     * Updates if frame >= firstUpdateFrame_ and in the interval specified by
+     * updateIntervalFrames_.
+     *
+     * An update consists of:
+     * 1. Writing the observation to the shared-memory.
+     * 2. Waiting max. 30s for a response from the python side.
+     * 3. Executing the actions.
+     */
     void eventUpdate(const void *data);
+
+    /**
+     * \brief Method to execute a specific action.
+     * \param action Action to execute.
+     */
+    void executeAction(const Action &action);
+
+    /**
+     * \brief Attacks a target unit.
+     * \param unit Our unit.
+     * \param unitId Custom id for \p unit.
+     * \param targetTeamId \todo I am uncertain whether this is correct, I guess
+     * it should be the target team but we are kinda passing our own teamId.
+     * \param targetUnitId Custom id for the target unit.
+     */
+    void executeActionAttack(springai::Unit *unit, const uint32_t unitId,
+                             const uint32_t targetTeamId,
+                             const uint32_t targetUnitId);
+
+    /**
+     * \brief Executes any move action, i.e. up, right, down or left.
+     * \param unit Our unit.
+     * \param unitId Custom id for \p unit.
+     * \param moveAction Type of move action.
+     *
+     * Does not throw if called with another action but issues a critcal
+     * warning. This should never happen!
+     */
+    void executeActionMove(springai::Unit *unit, const uint32_t unitId,
+                           const ActionId moveAction);
 
     /**
      * \brief Finishes an episode by writing one last observation and
