@@ -8,8 +8,8 @@
 #include <unordered_map>
 #include <vector>
 
-#include "UnBARableAI/unit_data.h"
 #include "UnBARableAI/engine_status.h"
+#include "UnBARableAI/unit_data.h"
 
 class UnBARableAI {
   public:
@@ -34,7 +34,8 @@ class UnBARableAI {
     using UnitData = UnBARableAINS::unit::UnitData;
 
   private:
-    void finishEpisode(UnBARableAINS::EngineStatus status, const std::string& reason);
+    void finishEpisode(UnBARableAINS::EngineStatus status,
+                       const std::string &reason);
     void writeObservationToSharedMemory();
     void writeUnitToSharedMemory(springai::Unit *unit);
 
