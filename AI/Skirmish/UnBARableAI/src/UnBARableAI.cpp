@@ -64,54 +64,8 @@ void UnBARableAI::HandleEvent(int topic, const void *data) {
         eventUnitDestroyed(data);
         break;
     }
-
     case EVENT_LUA_MESSAGE: {
-        const auto *event = static_cast<const SLuaMessageEvent *>(data);
-
-        if (event == nullptr || event->inData == nullptr) {
-            SPDLOG_LOGGER_WARN(logger, "Received empty EVENT_LUA_MESSAGE");
-            break;
-        }
-
-        const std::string message{event->inData};
-
-        SPDLOG_LOGGER_INFO(logger, "Received Lua message: {}", message);
-
-        constexpr std::string_view prefix = "UNBARABLE_GAME_OVER;";
-
-        if (!message.starts_with(prefix)) {
-            break;
-        }
-
-        if (gameOver_) {
-            SPDLOG_LOGGER_DEBUG(
-                logger, "Ignoring duplicate game-over message: {}", message);
-
-            break;
-        }
-
-        const bool won = message.find(";result=win;") != std::string::npos;
-
-        const bool lost = message.find(";result=loss;") != std::string::npos;
-
-        if (!won && !lost) {
-            SPDLOG_LOGGER_ERROR(logger, "Invalid game-over message: {}",
-                                message);
-
-            break;
-        }
-
-        SPDLOG_LOGGER_INFO(logger,
-                           "Authoritative game result received: "
-                           "result={}, current_frame={}, message={}",
-                           won ? "win" : "loss", currentFrame_, message);
-
-        if (won) {
-            finishEpisode(UnBARableAINS::EngineStatus::GAME_ENDED, message);
-        } else {
-            finishEpisode(UnBARableAINS::EngineStatus::TEAM_DIED, message);
-        }
-
+        eventLuaMessage(data);
         break;
     }
     case EVENT_RELEASE: {
@@ -336,7 +290,48 @@ void UnBARableAI::eventUnitDestroyed(const void *data) {
     }
 }
 
-void UnBARableAI::finishEpisode(UnBARableAINS::EngineStatus status,
+void UnBARableAI::eventLuaMessage(const void *data) {
+    const auto *event = static_cast<const SLuaMessageEvent *>(data);
+
+    if (event == nullptr || event->inData == nullptr) {
+        SPDLOG_LOGGER_WARN(logger, "Received empty EVENT_LUA_MESSAGE");
+        return;
+    }
+
+    const std::string message{event->inData};
+    SPDLOG_LOGGER_INFO(logger, "Received Lua message: {}", message);
+
+    constexpr std::string_view gameOverPrefix = "UNBARABLE_GAME_OVER;";
+    if (!message.starts_with(gameOverPrefix)) {
+        return;
+    }
+
+    if (gameOver_) {
+        SPDLOG_LOGGER_DEBUG(logger, "Ignoring duplicate game-over message: {}",
+                            message);
+        return;
+    }
+
+    const bool won = message.find(";result=win;") != std::string::npos;
+    const bool lost = message.find(";result=loss;") != std::string::npos;
+    if (!won && !lost) {
+        SPDLOG_LOGGER_ERROR(logger, "Invalid game-over message: {}", message);
+        return;
+    }
+
+    SPDLOG_LOGGER_INFO(logger,
+                       "Authoritative game result received: "
+                       "result={}, current_frame={}, message={}",
+                       won ? "win" : "loss", currentFrame_, message);
+
+    if (won) {
+        finishEpisode(UnBARableAINS::EngineStatus::GAME_ENDED, message);
+    } else {
+        finishEpisode(UnBARableAINS::EngineStatus::TEAM_DIED, message);
+    }
+}
+
+void UnBARableAI::finishEpisode(const UnBARableAINS::EngineStatus status,
                                 const std::string &reason) {
     if (gameOver_) {
         SPDLOG_LOGGER_WARN(logger,
@@ -369,28 +364,23 @@ void UnBARableAI::finishEpisode(UnBARableAINS::EngineStatus status,
     try {
         auto sharedMemory =
             UnBARableAINS::memory::BarSharedMemory::open(shmName_);
-
-        const auto serializableId = sharedMemory.writeEngineStatus(status);
-
-        SPDLOG_LOGGER_INFO(
-            logger,
-            "Terminal engine status written: "
-            "frame={}, status={}, reason=\"{}\", serializable_id={}",
-            currentFrame_, static_cast<int>(status), reason, serializableId);
+        sharedMemory.updateEngineStatus(status);
+        SPDLOG_LOGGER_INFO(logger,
+                           "Terminal engine status updated: "
+                           "frame={}, status={}, reason=\"{}\"",
+                           currentFrame_, static_cast<int>(status), reason);
     } catch (const std::exception &exception) {
         SPDLOG_LOGGER_ERROR(logger,
-                            "Failed to write terminal engine status: "
+                            "Failed to update to terminal engine status: "
                             "frame={}, status={}, reason=\"{}\", error={}",
                             currentFrame_, static_cast<int>(status), reason,
                             exception.what());
-
         return;
     } catch (...) {
         SPDLOG_LOGGER_ERROR(logger,
-                            "Failed to write terminal engine status: "
+                            "Failed to update to terminal engine status: "
                             "frame={}, status={}, reason=\"{}\", unknown error",
                             currentFrame_, static_cast<int>(status), reason);
-
         return;
     }
 

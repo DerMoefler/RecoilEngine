@@ -72,7 +72,28 @@ class UnBARableAI {
      */
     void eventUnitDestroyed(const void *data);
 
-    void finishEpisode(UnBARableAINS::EngineStatus status,
+    /**
+     * \brief Implementation for the topic "EVENT_UNIT_DESTROYED".
+     * \param data Data passed to \ref HandleEvent.
+     *
+     * This method currently only handles messages starting with the prefix
+     * "UNBARABLE_GAME_OVER". Such a message must contain either ";result=win"
+     * or ";result=loss". It finishes the game/episode appropriately by calling
+     * \ref finishEpisode.
+     */
+    void eventLuaMessage(const void *data);
+
+    /**
+     * \brief Finishes an episode by writing one last observation and waiting
+     * for a HandleEventUpdate.
+     * \param status New status of the engine, written to shared-memory.
+     * \param reason Reason to print for why/how the episode finished.
+     *
+     * Writes the last observation and then sets gameOver_. Waits 30s for the
+     * HandleEventUpdate response. The method ignores calls to it after
+     * gameOver_ has been set already.
+     */
+    void finishEpisode(const UnBARableAINS::EngineStatus status,
                        const std::string &reason);
     void writeObservationToSharedMemory();
     void writeUnitToSharedMemory(springai::Unit *unit);
