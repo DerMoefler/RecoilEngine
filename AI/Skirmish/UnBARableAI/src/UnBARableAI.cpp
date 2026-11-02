@@ -69,40 +69,7 @@ void UnBARableAI::HandleEvent(int topic, const void *data) {
         break;
     }
     case EVENT_RELEASE: {
-        const auto *event = static_cast<const SReleaseEvent *>(data);
-
-        const int releaseReason = event != nullptr ? event->reason : 0;
-
-        SPDLOG_LOGGER_INFO(logger,
-                           "EVENT_RELEASE received: "
-                           "reason={}, game_over={}, "
-                           "current_frame={}",
-                           releaseReason, gameOver_, currentFrame_);
-
-        if (!gameOver_) {
-            SPDLOG_LOGGER_WARN(
-                logger,
-                "EVENT_RELEASE received before game-over message. "
-                "Writing terminal loss observation at frame {}. "
-                "Release reason={}",
-                currentFrame_, releaseReason);
-
-            finishEpisode(
-                UnBARableAINS::EngineStatus::TEAM_DIED,
-                "release_fallback"
-                ";frame=" +
-                    std::to_string(currentFrame_) +
-                    ";release_reason=" + std::to_string(releaseReason));
-        } else {
-            SPDLOG_LOGGER_INFO(logger, "Episode already finished. "
-                                       "EVENT_RELEASE performs cleanup only.");
-        }
-
-        engineToCustomUnitId_.clear();
-        customToEngineUnitId_.clear();
-
-        SPDLOG_LOGGER_DEBUG(logger, "EVENT_RELEASE cleanup completed");
-
+        eventRelease(data);
         break;
     }
     case EVENT_UPDATE: {
@@ -329,6 +296,40 @@ void UnBARableAI::eventLuaMessage(const void *data) {
     } else {
         finishEpisode(UnBARableAINS::EngineStatus::TEAM_DIED, message);
     }
+}
+
+void UnBARableAI::eventRelease(const void *data) {
+    const auto *event = static_cast<const SReleaseEvent *>(data);
+
+    const int releaseReason = event != nullptr ? event->reason : 0;
+
+    SPDLOG_LOGGER_INFO(logger,
+                       "EVENT_RELEASE received: "
+                       "reason={}, game_over={}, "
+                       "current_frame={}",
+                       releaseReason, gameOver_, currentFrame_);
+
+    if (!gameOver_) {
+        SPDLOG_LOGGER_WARN(logger,
+                           "EVENT_RELEASE received before game-over message. "
+                           "Writing terminal loss observation at frame {}. "
+                           "Release reason={}",
+                           currentFrame_, releaseReason);
+
+        finishEpisode(UnBARableAINS::EngineStatus::TEAM_DIED,
+                      "release_fallback"
+                      ";frame=" +
+                          std::to_string(currentFrame_) +
+                          ";release_reason=" + std::to_string(releaseReason));
+    } else {
+        SPDLOG_LOGGER_INFO(logger, "Episode already finished. "
+                                   "EVENT_RELEASE performs cleanup only.");
+    }
+
+    engineToCustomUnitId_.clear();
+    customToEngineUnitId_.clear();
+
+    SPDLOG_LOGGER_DEBUG(logger, "EVENT_RELEASE cleanup completed");
 }
 
 void UnBARableAI::finishEpisode(const UnBARableAINS::EngineStatus status,

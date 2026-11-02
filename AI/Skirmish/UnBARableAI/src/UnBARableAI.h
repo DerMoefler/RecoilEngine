@@ -84,6 +84,17 @@ class UnBARableAI {
     void eventLuaMessage(const void *data);
 
     /**
+     * \brief Implementation for the topic "EVENT_RELEASE".
+     * \param data Data passed to \ref HandleEvent.
+     *
+     * EVENT_RELEASE is issued when the AI is to clean itself up. If the game is
+     * not yet over, it finishes the episode with a call to \ref finishEpisode
+     * with the status EngineStatus::TEAM_DIED. In either case it then clears
+     * its mapping from engine to custom id and vice versa.
+     */
+    void eventRelease(const void *data);
+
+    /**
      * \brief Finishes an episode by writing one last observation and waiting
      * for a HandleEventUpdate.
      * \param status New status of the engine, written to shared-memory.
