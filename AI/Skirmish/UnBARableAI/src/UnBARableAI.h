@@ -50,11 +50,18 @@ class UnBARableAI {
     static constexpr std::string_view c_shm_base_name = "/sm_proc";
 
     /**
-     * \brief Initializes \ref shm_ using \ref c_shm_base_name and the
-     * process id for the name.
+     * \brief Returns the name for the shared-memory constructed from the \ref
+     * c_shm_base_name and the process id.
      */
     static std::string getShmName(void);
 
+    /**
+     * \brief Helper method updating the status and logging an optional reason.
+     * \param status New EngineStatus.
+     * \param reason Optional reason, otherwise logs "Not specified".
+     *
+     * Catches errors while updating the engine status and logs them.
+     */
     void updateEngineStatus(
         const EngineStatus status,
         const std::optional<std::string_view> reason = std::nullopt);
@@ -108,13 +115,13 @@ class UnBARableAI {
     void eventUpdate(const void *data);
 
     /**
-     * \brief Finishes an episode by writing one last observation and waiting
-     * for a HandleEventUpdate.
+     * \brief Finishes an episode by writing one last observation and
+     * waiting for a HandleEventUpdate.
      * \param status New status of the engine, written to shared-memory.
      * \param reason Reason to print for why/how the episode finished.
      *
-     * Writes the last observation and then sets gameOver_. Waits 30s for the
-     * HandleEventUpdate response. The method ignores calls to it after
+     * Writes the last observation and then sets gameOver_. Waits 30s for
+     * the HandleEventUpdate response. The method ignores calls to it after
      * gameOver_ has been set already.
      */
     void finishEpisode(const UnBARableAINS::EngineStatus status,
@@ -138,15 +145,22 @@ class UnBARableAI {
      * \param engineUnitId Unit assigned by the engine.
      * \returns Mapped id.
      */
-    int registerUnit(int engineUnitId);
+    uint32_t registerUnit(int engineUnitId);
 
     /**
      * \brief Get the custom unit id from an engine id.
      * \param engineUnitId Id assigned to the unit by the engine.
-     * \returns Custom id assigned by the shared-memory, -1 if not registered.
+     * \returns Custom id assigned by the shared-memory, std::nullopt if not
+     * registered.
      */
-    int getCustomUnitId(int engineUnitId) const;
-    int getEngineUnitId(int customUnitId) const;
+    std::optional<uint32_t> getCustomUnitId(int engineUnitId) const;
+
+    /**
+     * \brief Get the engine unit id from a custom id.
+     * \param customUnitId Id assigend by the shared-memory.
+     * \returns Engine unit id, std::nullopt if not registered.
+     */
+    std::optional<int> getEngineUnitId(uint32_t customUnitId) const;
 
     void loadConfiguration(void);
 
@@ -156,13 +170,13 @@ class UnBARableAI {
     BarSharedMemory shm_;
 
     // Engine Unit ID -> eigene fortlaufende Unit ID
-    std::unordered_map<int, int> engineToCustomUnitId_;
+    std::unordered_map<int, uint32_t> engineToCustomUnitId_;
 
     // Eigene Unit ID -> Engine Unit ID
-    std::unordered_map<int, int> customToEngineUnitId_;
+    std::unordered_map<uint32_t, int> customToEngineUnitId_;
 
     bool gameOver_ = false;
-    int nextCustomUnitId_ = 0;
+    uint32_t nextCustomUnitId_ = 0;
     int currentFrame_ = -1;
     int updateIntervalFrames_ = 2;
     int firstUpdateFrame_ = 2;

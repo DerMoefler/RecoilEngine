@@ -259,7 +259,10 @@ void UnBARableAI::eventUnitDestroyed(const void *data) {
         static_cast<const SUnitDestroyedEvent *>(data);
 
     const int engineUnitId = event->unit;
-    const int customUnitId = getCustomUnitId(engineUnitId);
+    const auto customUnitIdOpt = getCustomUnitId(engineUnitId);
+    const std::string customUnitIdDisplayName =
+        customUnitIdOpt.has_value() ? std::to_string(customUnitIdOpt.value())
+                                    : "Unregistered";
 
     springai::Unit *unit =
         springai::WrappUnit::GetInstance(teamId_, engineUnitId);
@@ -269,17 +272,17 @@ void UnBARableAI::eventUnitDestroyed(const void *data) {
                            "Unit destroyed: name=\"{}\", engine_unit_id={}, "
                            "custom_unit_id={}, attacker_engine_id={}",
                            unit->GetDef()->GetName(), engineUnitId,
-                           customUnitId, event->attacker);
+                           customUnitIdDisplayName, event->attacker);
     }
 
     // Remove mapping if unit was registered
-    if (customUnitId != -1) {
+    if (customUnitIdOpt.has_value()) {
         engineToCustomUnitId_.erase(engineUnitId);
-        customToEngineUnitId_.erase(customUnitId);
+        customToEngineUnitId_.erase(customUnitIdOpt.value());
 
         SPDLOG_LOGGER_DEBUG(
             logger, "Removed unit mapping: engine ID {} -> custom ID {}",
-            engineUnitId, customUnitId);
+            engineUnitId, customUnitIdOpt.value());
     }
 }
 
@@ -525,8 +528,9 @@ UnBARableAI::UnitData UnBARableAI::getUnitData(springai::Unit *unit) {
     UnitData unitData{};
 
     int engineUnitId = unit->GetUnitId();
-    int customUnitId = registerUnit(
-        engineUnitId); // wenn id schon regestriert ist wird diese zurückgegeben
+    int customUnitId =
+        registerUnit(engineUnitId); // wenn id schon regestriert ist
+                                    // wird diese zurückgegeben
 
     unitData.unit_id = customUnitId;
     unitData.unit_def_id = unit->GetDef()->GetUnitDefId();
@@ -570,7 +574,8 @@ std::filesystem::path UnBARableAI::writeSharedMemoryState(void) const {
     std::ifstream shmFile(shmFilename, std::ios::binary);
     if (!shmFile) {
         throw std::ios_base::failure{
-            "UnBARableAI::writeSharedMemoryState: Could not open shared-memory "
+            "UnBARableAI::writeSharedMemoryState: Could not open "
+            "shared-memory "
             "file '" +
             shmFilename.string() + "'"};
     }
@@ -606,41 +611,41 @@ std::filesystem::path UnBARableAI::getSharedMemoryStateFilename(void) {
     return directory / ("shared_memor_state_" + timestamp.str() + ".log");
 }
 
-int UnBARableAI::registerUnit(int engineUnitId) {
+uint32_t UnBARableAI::registerUnit(int engineUnitId) {
     const auto existingUnit = engineToCustomUnitId_.find(engineUnitId);
 
     if (existingUnit != engineToCustomUnitId_.end()) {
         return existingUnit->second;
     }
 
-    const int customUnitId = nextCustomUnitId_++;
+    const uint32_t customUnitId = nextCustomUnitId_++;
 
     engineToCustomUnitId_[engineUnitId] = customUnitId;
     customToEngineUnitId_[customUnitId] = engineUnitId;
 
-    SPDLOG_LOGGER_DEBUG(
-        logger,
-        "Registered unit mapping: engine_unit_id={} -> custom_unit_id={}",
-        engineUnitId, customUnitId);
+    SPDLOG_LOGGER_DEBUG(logger,
+                        "Registered unit mapping: engine_unit_id={} -> "
+                        "custom_unit_id={}",
+                        engineUnitId, customUnitId);
 
     return customUnitId;
 }
 
-int UnBARableAI::getCustomUnitId(int engineUnitId) const {
+std::optional<uint32_t> UnBARableAI::getCustomUnitId(int engineUnitId) const {
     const auto unitEntry = engineToCustomUnitId_.find(engineUnitId);
 
     if (unitEntry == engineToCustomUnitId_.end()) {
-        return -1;
+        return std::nullopt;
     }
 
     return unitEntry->second;
 }
 
-int UnBARableAI::getEngineUnitId(int customUnitId) const {
+std::optional<int> UnBARableAI::getEngineUnitId(uint32_t customUnitId) const {
     const auto unitEntry = customToEngineUnitId_.find(customUnitId);
 
     if (unitEntry == customToEngineUnitId_.end()) {
-        return -1;
+        return std::nullopt;
     }
 
     return unitEntry->second;
