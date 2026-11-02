@@ -43,43 +43,21 @@ UnBARableAI::UnBARableAI(springai::OOAICallback *callback)
     : callback_(callback) {
     teamId_ = callback_->GetSkirmishAIId();
     srand(time(NULL));
+    initShmName();
 }
 
-UnBARableAI::~UnBARableAI() {
+UnBARableAI::~UnBARableAI(void) {
     // Cleanup if needed
 }
 
 void UnBARableAI::HandleEvent(int topic, const void *data) {
     switch (topic) {
     case EVENT_INIT: {
-        // Initialization event
-        pid_t pid = getpid();
-        shmName_ = "/sm_proc_" + std::to_string(pid);
-
-        loadConfiguration();
-
-        SPDLOG_LOGGER_INFO(
-            logger,
-            "Received INIT event: team_id={}, pid={}, shared_memory=\"{}\"",
-            teamId_, pid, shmName_);
+        eventInit(data);
         break;
     }
     case EVENT_UNIT_CREATED: {
-        const SUnitCreatedEvent *event =
-            static_cast<const SUnitCreatedEvent *>(data);
-        const int engineUnitId = event->unit;
-        const int customUnitId = registerUnit(engineUnitId);
-
-        springai::Unit *unit =
-            springai::WrappUnit::GetInstance(teamId_, engineUnitId);
-
-        springai::UnitDef *unitDef = unit->GetDef();
-
-        SPDLOG_LOGGER_INFO(
-            logger, "Unit created, name: {}, custom ID: {}, engine ID: {}",
-            (unitDef != nullptr ? unitDef->GetName() : "unknown"), customUnitId,
-            engineUnitId);
-
+        eventUnitCreated(data);
         break;
     }
     case EVENT_UNIT_DESTROYED: {
@@ -323,6 +301,36 @@ void UnBARableAI::HandleEvent(int topic, const void *data) {
     default:
         break;
     }
+}
+
+void UnBARableAI::initShmName(void) {
+    pid_t pid = getpid();
+    shmName_ = std::string(c_shm_base_name) + std::to_string(pid);
+}
+
+void UnBARableAI::eventInit(const void *data) {
+    loadConfiguration();
+
+    SPDLOG_LOGGER_INFO(logger,
+                       "Received INIT event: team_id={}, shared_memory=\"{}\"",
+                       teamId_, shmName_);
+}
+
+void UnBARableAI::eventUnitCreated(const void *data) {
+    const SUnitCreatedEvent *event =
+        static_cast<const SUnitCreatedEvent *>(data);
+    const int engineUnitId = event->unit;
+    const int customUnitId = registerUnit(engineUnitId);
+
+    springai::Unit *unit =
+        springai::WrappUnit::GetInstance(teamId_, engineUnitId);
+
+    springai::UnitDef *unitDef = unit->GetDef();
+
+    SPDLOG_LOGGER_INFO(logger,
+                       "Unit created, name: {}, custom ID: {}, engine ID: {}",
+                       (unitDef != nullptr ? unitDef->GetName() : "unknown"),
+                       customUnitId, engineUnitId);
 }
 
 void UnBARableAI::finishEpisode(UnBARableAINS::EngineStatus status,
@@ -647,7 +655,7 @@ int UnBARableAI::getEngineUnitId(int customUnitId) const {
 #include <stdexcept>
 #include <string>
 
-void UnBARableAI::loadConfiguration() {
+void UnBARableAI::loadConfiguration(void) {
     springai::SkirmishAI *skirmishAI = callback_->GetSkirmishAI();
 
     springai::OptionValues *options = skirmishAI->GetOptionValues();

@@ -16,9 +16,14 @@ class UnBARableAI {
     /**
      * \brief Constructor
      * \param callback The callback interface provided by the game engine.
+     *
+     * Sets own team id and initializes built-in random number generator
+     * (srand). Also calls \ref initShmName.
      */
     UnBARableAI(springai::OOAICallback *callback);
-    ~UnBARableAI();
+
+    /// \brief Empty destructor.
+    ~UnBARableAI(void);
 
     /**
      * \brief Handles events from the game engine.
@@ -34,6 +39,31 @@ class UnBARableAI {
     using UnitData = UnBARableAINS::unit::UnitData;
 
   private:
+    /// \brief Shm name consists of this base name + the process id.
+    static constexpr std::string_view c_shm_base_name = "/sm_proc";
+
+    /**
+     * \brief Initializes \ref shmName_ using \ref c_shm_base_name and the
+     * process id.
+     */
+    void initShmName(void);
+
+    /**
+     * \brief Implementation for the topic "EVENT_INIT".
+     * \param data Data passed to \ref HandleEvent.
+     *
+     * Calls \ref loadConfiguration.
+     */
+    void eventInit(const void *data);
+
+    /**
+     * \brief Implementation for the topic "EVENT_UNIT_CREATED".
+     * \param data Data passed to \ref HandleEvent.
+     *
+     * Simply registers a unit using \ref registerUnit.
+     */
+    void eventUnitCreated(const void *data);
+
     void finishEpisode(UnBARableAINS::EngineStatus status,
                        const std::string &reason);
     void writeObservationToSharedMemory();
@@ -59,7 +89,7 @@ class UnBARableAI {
     int getCustomUnitId(int engineUnitId) const;
     int getEngineUnitId(int customUnitId) const;
 
-    void loadConfiguration();
+    void loadConfiguration(void);
 
     springai::OOAICallback *callback_;
     int teamId_;
