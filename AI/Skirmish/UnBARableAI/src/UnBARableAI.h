@@ -16,6 +16,13 @@
 #include "UnBARableAI/engine_status.h"
 #include "UnBARableAI/unit_data.h"
 
+/**
+ * \brief Implementation for the UnBARableAI communicating with the training /
+ * inference through shared-memory.
+ *
+ * This class assumes that the shared-memory outlives its instance, i.e. it
+ * opens it on construction and uses it as long as the instance lives.
+ */
 class UnBARableAI {
   public:
     /**
@@ -181,10 +188,33 @@ class UnBARableAI {
      */
     void finishEpisode(const UnBARableAINS::EngineStatus status,
                        const std::string &reason);
-    void writeObservationToSharedMemory();
-    void writeUnitToSharedMemory(springai::Unit *unit);
 
-    UnitData getUnitData(springai::Unit *unit);
+    /**
+     * \brief Updates the observation in the shared-memory.
+     *
+     * This method does register new units, however if there is not enough
+     * capacity allocated in the shared-memory it will not be written.
+     * \see updateUnit.
+     */
+    void updateObservation(void);
+
+    /**
+     * \brief Update a unit in the shared-memory.
+     * \param unit Engine unit to update.
+     * \returns Whether the unit was actually written or not.
+     *
+     * This method registers a unit if it is new, however if no segment is
+     * available via BarSharedMemory::getEmptyUnitSlot, it does nothing.
+     */
+    bool updateUnit(springai::Unit *unit);
+
+    /**
+     * \brief Construct UnitData for a \p unit.
+     * \param unit Engine unit.
+     * \returns UnitData or std::nullopt if \ref registerUnit returns
+     * std::nullopt as well.
+     */
+    std::optional<UnitData> getUnitData(springai::Unit *unit);
 
     /// \brief Hexdumps the \ref c_shm_name to a logfile (see \ref
     /// getSharedMemoryStateFilename).
@@ -198,9 +228,12 @@ class UnBARableAI {
      * \brief Registers a unit if not present, otherwise returns already
      * registered id.
      * \param engineUnitId Unit assigned by the engine.
-     * \returns Mapped id.
+     * \returns Mapped id or std::nullopt if not registrable.
+     *
+     * Registration fails if the shared-memory does not have an empty
+     * UnitDataOpt available.
      */
-    uint32_t registerUnit(int engineUnitId);
+    std::optional<uint32_t> registerUnit(const int engineUnitId);
 
     /**
      * \brief Get the custom unit id from an engine id.
@@ -231,7 +264,6 @@ class UnBARableAI {
     std::unordered_map<uint32_t, int> customToEngineUnitId_;
 
     bool gameOver_ = false;
-    uint32_t nextCustomUnitId_ = 0;
     int currentFrame_ = -1;
     int updateIntervalFrames_ = 2;
     int firstUpdateFrame_ = 2;

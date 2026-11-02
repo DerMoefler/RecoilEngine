@@ -122,7 +122,13 @@ void UnBARableAI::eventUnitCreated(const void *data) {
     const SUnitCreatedEvent *event =
         static_cast<const SUnitCreatedEvent *>(data);
     const int engineUnitId = event->unit;
-    const int customUnitId = registerUnit(engineUnitId);
+    const auto customUnitIdOpt = registerUnit(engineUnitId);
+    if (!customUnitIdOpt.has_value()) {
+        SPDLOG_LOGGER_ERROR(logger, "EVENT_UNIT_CREATED failed");
+        return;
+    }
+
+    const auto customUnitId = customUnitIdOpt.value();
 
     springai::Unit *unit =
         springai::WrappUnit::GetInstance(teamId_, engineUnitId);
@@ -264,7 +270,7 @@ void UnBARableAI::eventUpdate(const void *data) {
             "-----------",
             currentFrame_);
 
-        writeObservationToSharedMemory();
+        updateObservation();
 
         // Call python side
         UnBARableAIClient client = UnBARableAIClient();
@@ -414,7 +420,7 @@ void UnBARableAI::finishEpisode(const UnBARableAINS::EngineStatus status,
                        currentFrame_, static_cast<int>(status), reason);
 
     try {
-        writeObservationToSharedMemory();
+        updateObservation();
     } catch (const std::exception &exception) {
         SPDLOG_LOGGER_ERROR(
             logger, "Failed to write terminal observation at frame {}: {}",
@@ -448,51 +454,69 @@ void UnBARableAI::finishEpisode(const UnBARableAINS::EngineStatus status,
                        currentFrame_, static_cast<int>(status), reason);
 }
 
-void UnBARableAI::writeObservationToSharedMemory() {
+void UnBARableAI::updateObservation(void) {
     std::vector<springai::Unit *> friendlyUnits = callback_->GetFriendlyUnits();
     std::vector<springai::Unit *> enemyUnits =
         callback_->GetEnemyUnitsInRadarAndLos();
     std::vector<springai::Unit *> neutralUnits = callback_->GetNeutralUnits();
 
-    for (springai::Unit *unit : friendlyUnits) {
-        writeUnitToSharedMemory(unit);
+    // Lambda to write the three unit types.
+    auto updateUnits = [&](std::vector<springai::Unit *> units,
+                           const std::string_view name) -> std::size_t {
+        std::size_t failed{0};
+        const std::size_t totalNumUnits = units.size();
+        for (springai::Unit *unit : units) {
+            bool success = updateUnit(unit);
+            if (!success) {
+                failed++;
+            }
+        }
+        if (!failed) {
+            SPDLOG_LOGGER_TRACE(logger, "Wrote {} {} units", totalNumUnits,
+                                name);
+        } else {
+            SPDLOG_LOGGER_TRACE(logger,
+                                "Total number of {} units: {}. Wrote {} units, "
+                                "failed writing for {} units.",
+                                name, totalNumUnits, totalNumUnits - failed,
+                                failed);
+        }
+        return failed;
+    };
+
+    std::size_t failed{0};
+    failed += updateUnits(friendlyUnits, "friendly");
+    failed += updateUnits(enemyUnits, "enemy");
+    failed += updateUnits(neutralUnits, "neutral");
+
+    if (!failed) {
+        SPDLOG_LOGGER_DEBUG(
+            logger, "observations written: friendly={}, enemy={}, neutral={}",
+            friendlyUnits.size(), enemyUnits.size(), neutralUnits.size());
+    } else {
+        SPDLOG_LOGGER_ERROR(logger, "Failed writing {} units", failed);
     }
-    SPDLOG_LOGGER_TRACE(logger, "friendly Units written size: {}",
-                        friendlyUnits.size());
-
-    for (springai::Unit *unit : enemyUnits) {
-        writeUnitToSharedMemory(unit);
-    }
-
-    SPDLOG_LOGGER_TRACE(logger, "enemy Units written size: {}",
-                        enemyUnits.size());
-
-    for (springai::Unit *unit : neutralUnits) {
-        writeUnitToSharedMemory(unit);
-    }
-
-    SPDLOG_LOGGER_TRACE(logger, "neutral Units written size: {}",
-                        neutralUnits.size());
-
-    SPDLOG_LOGGER_DEBUG(
-        logger, "observations written: friendly={}, enemy={}, neutral={}",
-        friendlyUnits.size(), enemyUnits.size(), neutralUnits.size());
 }
 
-void UnBARableAI::writeUnitToSharedMemory(springai::Unit *unit) {
+bool UnBARableAI::updateUnit(springai::Unit *unit) {
     UnitData unitData{};
     try {
-        unitData = getUnitData(unit);
+        const auto opt = getUnitData(unit);
+        if (!opt.has_value()) {
+            SPDLOG_LOGGER_ERROR(logger, "Cannot update unit.");
+            return false;
+        } else {
+            unitData = opt.value();
+        }
     } catch (const std::exception &e) {
         SPDLOG_LOGGER_ERROR(logger,
                             "Getting UnitData failed for engine_unit_id={}: {}",
                             unit->GetUnitId(), e.what());
+        return false;
     }
-
     SPDLOG_LOGGER_DEBUG(
         logger, "Writing observation to shared memory for engine_unit_id={}",
         unit->GetUnitId());
-
     if (logger->should_log(spdlog::level::trace)) {
         std::ostringstream dump;
 
@@ -501,75 +525,41 @@ void UnBARableAI::writeUnitToSharedMemory(springai::Unit *unit) {
         SPDLOG_LOGGER_TRACE(logger, "UnitData for engine_unit_id={}:\n{}",
                             unit->GetUnitId(), dump.str());
     }
-
     try {
-        auto sharedMemory =
-            UnBARableAINS::memory::BarSharedMemory::open(shmName_);
-        UnBARableAINS::debug::makeIndentation(std::cout, 1);
-        SPDLOG_LOGGER_DEBUG(
-            logger, "1) Opened BarSharedMemory with name \"{}\"", shmName_);
-        try {
-            UnBARableAINS::debug::makeIndentation(std::cout, 1);
-            SPDLOG_LOGGER_DEBUG(
-                logger,
-                "2) Writing UnitData to shared memory: engine_unit_id={}",
-                unit->GetUnitId());
-
-            const auto serializableId = sharedMemory.writeUnitData(unitData);
-
-            UnBARableAINS::debug::makeIndentation(std::cout, 1);
-            SPDLOG_LOGGER_DEBUG(logger,
-                                "3) Wrote UnitData to shared memory: "
-                                "engine_unit_id={}, serializable_id={}",
-                                unit->GetUnitId(), serializableId);
-        } catch (const std::exception &exception) {
-            SPDLOG_LOGGER_ERROR(
-                logger, "writeUnitData failed for engine_unit_id={}: {}",
-                unit->GetUnitId(), exception.what());
-
-            throw;
-        } catch (...) {
-            SPDLOG_LOGGER_ERROR(
-                logger,
-                "writeUnitData failed for engine_unit_id={} with unknown error",
-                unit->GetUnitId());
-
-            throw;
-        }
-    } catch (const std::system_error &e) {
+        shm_.updateUnitData(unitData.unit_id, unitData);
+        SPDLOG_LOGGER_DEBUG(logger,
+                            "Wrote UnitData to shared memory: "
+                            "engine_unit_id={}, serializable_id={}",
+                            unit->GetUnitId(), unitData.unit_id);
+        return true;
+    } catch (const std::exception &exception) {
         SPDLOG_LOGGER_ERROR(logger,
-                            "UnBARableAI::writeUnitToSharedMemory failed: "
-                            "System Error "
-                            "{} when opening the BarSharedMemory.",
-                            e.what());
-    } catch (const std::exception &e) {
-        SPDLOG_LOGGER_ERROR(logger,
-                            "UnBARableAI::writeUnitToSharedMemory failed: "
-                            "Exception {} when opening the BarSharedMemory.",
-                            e.what());
-
-        try {
-            auto path = writeSharedMemoryState();
-            SPDLOG_LOGGER_ERROR(
-                logger, "Shared memory state written to {} for debugging.",
-                path.string());
-        } catch (const std::exception &e) {
-            SPDLOG_LOGGER_ERROR(
-                logger, "Could not write shared memory state. Reason: {}",
-                e.what());
-        }
+                            "writeUnitData failed for engine_unit_id={}: {}",
+                            unit->GetUnitId(), exception.what());
+        return false;
+    } catch (...) {
+        SPDLOG_LOGGER_ERROR(
+            logger,
+            "writeUnitData failed for engine_unit_id={} with unknown error",
+            unit->GetUnitId());
+        return false;
     }
 }
 
-UnBARableAI::UnitData UnBARableAI::getUnitData(springai::Unit *unit) {
+auto UnBARableAI::getUnitData(springai::Unit *unit) -> std::optional<UnitData> {
     UnitData unitData{};
 
     int engineUnitId = unit->GetUnitId();
-    int customUnitId =
+    const auto customUnitIdOpt =
         registerUnit(engineUnitId); // wenn id schon regestriert ist
                                     // wird diese zurückgegeben
 
-    unitData.unit_id = customUnitId;
+    if (!customUnitIdOpt.has_value()) {
+        SPDLOG_LOGGER_ERROR(logger, "Cannot get unit data");
+        return std::nullopt;
+    }
+
+    unitData.unit_id = customUnitIdOpt.value();
     unitData.unit_def_id = unit->GetDef()->GetUnitDefId();
     // Currently unused
     std::string unitName = unit->GetDef()->GetName();
@@ -645,17 +635,27 @@ std::filesystem::path UnBARableAI::getSharedMemoryStateFilename(void) {
     std::ostringstream timestamp;
     timestamp << std::put_time(&localTime, "%Y-%m-%d_%H-%M-%S") << '.'
               << std::setfill('0') << std::setw(6) << microseconds.count();
-    return directory / ("shared_memor_state_" + timestamp.str() + ".log");
+    return directory / ("shared_memory_state_" + timestamp.str() + ".log");
 }
 
-uint32_t UnBARableAI::registerUnit(int engineUnitId) {
+std::optional<uint32_t> UnBARableAI::registerUnit(const int engineUnitId) {
     const auto existingUnit = engineToCustomUnitId_.find(engineUnitId);
 
     if (existingUnit != engineToCustomUnitId_.end()) {
         return existingUnit->second;
     }
 
-    const uint32_t customUnitId = nextCustomUnitId_++;
+    const auto unitSlot = shm_.getEmptyUnitSlot();
+
+    if (!unitSlot.has_value()) {
+        SPDLOG_LOGGER_CRITICAL(logger,
+                               "No empty UnitDataOpt Serializable left in "
+                               "shared-memory for engine unit {}",
+                               engineUnitId);
+        return std::nullopt;
+    }
+
+    const uint32_t customUnitId = unitSlot.value();
 
     engineToCustomUnitId_[engineUnitId] = customUnitId;
     customToEngineUnitId_[customUnitId] = engineUnitId;
