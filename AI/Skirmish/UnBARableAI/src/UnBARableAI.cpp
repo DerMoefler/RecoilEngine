@@ -61,33 +61,7 @@ void UnBARableAI::HandleEvent(int topic, const void *data) {
         break;
     }
     case EVENT_UNIT_DESTROYED: {
-        const SUnitDestroyedEvent *event =
-            static_cast<const SUnitDestroyedEvent *>(data);
-
-        springai::Unit *unit =
-            springai::WrappUnit::GetInstance(teamId_, event->unit);
-
-        const int engineUnitId = event->unit;
-        const int customUnitId = getCustomUnitId(engineUnitId);
-
-        if (unit && unit->GetDef()) {
-            SPDLOG_LOGGER_INFO(
-                logger,
-                "Unit destroyed: name=\"{}\", engine_unit_id={}, "
-                "custom_unit_id={}, attacker_engine_id={}",
-                unit->GetDef()->GetName(), engineUnitId, customUnitId,
-                event->attacker);
-        }
-
-        // Mapping entfernen
-        if (customUnitId != -1) {
-            engineToCustomUnitId_.erase(engineUnitId);
-            customToEngineUnitId_.erase(customUnitId);
-
-            SPDLOG_LOGGER_DEBUG(
-                logger, "Removed unit mapping: engine ID {} -> custom ID {}",
-                engineUnitId, customUnitId);
-        }
+        eventUnitDestroyed(data);
         break;
     }
 
@@ -331,6 +305,35 @@ void UnBARableAI::eventUnitCreated(const void *data) {
                        "Unit created, name: {}, custom ID: {}, engine ID: {}",
                        (unitDef != nullptr ? unitDef->GetName() : "unknown"),
                        customUnitId, engineUnitId);
+}
+
+void UnBARableAI::eventUnitDestroyed(const void *data) {
+    const SUnitDestroyedEvent *event =
+        static_cast<const SUnitDestroyedEvent *>(data);
+
+    const int engineUnitId = event->unit;
+    const int customUnitId = getCustomUnitId(engineUnitId);
+
+    springai::Unit *unit =
+        springai::WrappUnit::GetInstance(teamId_, engineUnitId);
+
+    if (unit && unit->GetDef()) {
+        SPDLOG_LOGGER_INFO(logger,
+                           "Unit destroyed: name=\"{}\", engine_unit_id={}, "
+                           "custom_unit_id={}, attacker_engine_id={}",
+                           unit->GetDef()->GetName(), engineUnitId,
+                           customUnitId, event->attacker);
+    }
+
+    // Remove mapping if unit was registered
+    if (customUnitId != -1) {
+        engineToCustomUnitId_.erase(engineUnitId);
+        customToEngineUnitId_.erase(customUnitId);
+
+        SPDLOG_LOGGER_DEBUG(
+            logger, "Removed unit mapping: engine ID {} -> custom ID {}",
+            engineUnitId, customUnitId);
+    }
 }
 
 void UnBARableAI::finishEpisode(UnBARableAINS::EngineStatus status,

@@ -64,6 +64,14 @@ class UnBARableAI {
      */
     void eventUnitCreated(const void *data);
 
+    /**
+     * \brief Implementation for the topic "EVENT_UNIT_DESTROYED".
+     * \param data Data passed to \ref HandleEvent.
+     *
+     * Removes unit mapping if the destroyed unit was registered.
+     */
+    void eventUnitDestroyed(const void *data);
+
     void finishEpisode(UnBARableAINS::EngineStatus status,
                        const std::string &reason);
     void writeObservationToSharedMemory();
@@ -86,6 +94,12 @@ class UnBARableAI {
      * \returns Mapped id.
      */
     int registerUnit(int engineUnitId);
+
+    /**
+     * \brief Get the custom unit id from an engine id.
+     * \param engineUnitId Id assigned to the unit by the engine.
+     * \returns Custom id assigned by the shared-memory, -1 if not registered.
+     */
     int getCustomUnitId(int engineUnitId) const;
     int getEngineUnitId(int customUnitId) const;
 
