@@ -66,14 +66,20 @@ class UnBARableAI {
     /// \brief Type alias for EngineStatus.
     using EngineStatus = UnBARableAINS::EngineStatus;
 
-    /// \brief Shm name consists of this base name + the process id.
-    static constexpr std::string_view c_shm_base_name = "/sm_proc";
-
     /**
-     * \brief Returns the name for the shared-memory constructed from the \ref
-     * c_shm_base_name and the process id.
+     * \brief Returns the name for the shared-memory read from the environment
+     * variable "UNBARABLEAI_SHM_NAME".
+     * \throws std::runtime_error if the environment variable is not set.
      */
     static std::string getShmName(void);
+
+    /**
+     * \brief Opens the shared-memory specified by \ref getShmName.
+     * \throws std::runtime_error if opening the shared-memory fails for
+     * whatever reason (like missing shm-name, the shm not actually existing,
+     * ...).
+     */
+    static BarSharedMemory openShm(void);
 
     /**
      * \brief Helper method updating the status and logging an optional reason.

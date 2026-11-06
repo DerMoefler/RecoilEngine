@@ -3,6 +3,7 @@
 #include <chrono>
 #include <cstdlib>
 #include <ctime>
+#include <format>
 #include <fstream>
 #include <iomanip>
 #include <ios>
@@ -37,7 +38,7 @@ ConfigureLogger configureLogger;
 } // namespace
 
 UnBARableAI::UnBARableAI(springai::OOAICallback *callback)
-    : callback_(callback), shm_(BarSharedMemory::open(getShmName())) {
+    : callback_(callback), shm_(openShm()) {
     teamId_ = callback_->GetSkirmishAIId();
     srand(time(NULL));
 }
@@ -78,8 +79,31 @@ void UnBARableAI::HandleEvent(int topic, const void *data) {
 }
 
 std::string UnBARableAI::getShmName(void) {
-    pid_t pid = getpid();
-    return std::string(c_shm_base_name) + std::to_string(pid);
+    const char *const value = std::getenv("UNBARABLEAI_SHM_NAME");
+
+    if (value == nullptr || *value == '\0') {
+        const std::string message =
+            "UNBARABLEAI_SHM_NAME environment variable is not set,";
+        SPDLOG_LOGGER_ERROR(logger, message);
+        throw std::runtime_error(message);
+    }
+
+    return std::string{value};
+}
+
+auto UnBARableAI::openShm(void) -> BarSharedMemory {
+    const auto shmName = getShmName();
+    try {
+        auto shm = BarSharedMemory::open(shmName);
+        SPDLOG_LOGGER_INFO(logger, "Opened SharedMemory \"{}\"", shmName);
+        return shm;
+    } catch (const std::exception &e) {
+        const std::string message =
+            std::format("Failed opening SharedMemory \"{}\". Reason: {}",
+                        shmName, e.what());
+        SPDLOG_LOGGER_ERROR(logger, message);
+        throw std::runtime_error(message);
+    }
 }
 
 void UnBARableAI::updateEngineStatus(
