@@ -297,7 +297,8 @@ void UnBARableAI::eventUpdate(const void *data) {
         updateObservation();
 
         // Call python side
-        UnBARableAIClient client = UnBARableAIClient();
+        const auto connection = shm_.getGrpcConnection();
+        UnBARableAIClient client = UnBARableAIClient(connection);
         if (!client.HandleEventUpdate(30000)) {
             SPDLOG_LOGGER_ERROR(logger, "Frame {} event update failed: {}",
                                 currentFrame_, client.GetLastError());
@@ -460,7 +461,9 @@ void UnBARableAI::finishEpisode(const UnBARableAINS::EngineStatus status,
 
     updateEngineStatus(status, reason);
 
-    UnBARableAIClient client;
+    // Call python side
+    const auto connection = shm_.getGrpcConnection();
+    UnBARableAIClient client = UnBARableAIClient(connection);
 
     if (!client.HandleEventUpdate(30000)) {
         SPDLOG_LOGGER_ERROR(logger,
