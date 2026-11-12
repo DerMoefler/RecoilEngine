@@ -672,7 +672,13 @@ std::optional<uint32_t> UnBARableAI::registerUnit(const int engineUnitId) {
         return existingUnit->second;
     }
 
-    const auto unitSlot = shm_.getEmptyUnitSlot();
+    std::set<BarSharedMemory::SerializableId> existingIds;
+
+    transform(customToEngineUnitId_.begin(), customToEngineUnitId_.end(),
+              std::inserter(existingIds, existingIds.end()),
+              [](auto pair) { return pair.first; });
+
+    const auto unitSlot = shm_.getEmptyUnitSlot(existingIds);
 
     if (!unitSlot.has_value()) {
         SPDLOG_LOGGER_CRITICAL(logger,
