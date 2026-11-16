@@ -2,23 +2,40 @@
 #define UNBARABLEAI_H
 
 #include "OOAICallback.h"
+#include "Unit.h"
+
+#include <cstdint>
 #include <filesystem>
 #include <optional>
 #include <string_view>
 #include <unordered_map>
 #include <vector>
 
-#include "UnBARableAI/unit_data.h"
+#include "UnBARableAI/action.h"
+#include "UnBARableAI/bar_shared_memory.h"
 #include "UnBARableAI/engine_status.h"
+#include "UnBARableAI/unit_data.h"
 
+/**
+ * \brief Implementation for the UnBARableAI communicating with the training /
+ * inference through shared-memory.
+ *
+ * This class assumes that the shared-memory outlives its instance, i.e. it
+ * opens it on construction and uses it as long as the instance lives.
+ */
 class UnBARableAI {
   public:
     /**
      * \brief Constructor
      * \param callback The callback interface provided by the game engine.
+     *
+     * Sets own team id and initializes built-in random number generator
+     * (srand). Also calls \ref initShmName.
      */
     UnBARableAI(springai::OOAICallback *callback);
-    ~UnBARableAI();
+
+    /// \brief Empty destructor.
+    ~UnBARableAI(void);
 
     /**
      * \brief Handles events from the game engine.
@@ -30,15 +47,180 @@ class UnBARableAI {
      */
     void HandleEvent(int topic, const void *data);
 
-    /// \brief Type Alias for UnitData.
+  private:
+    /// \brief Type alias for BarSharedMemory.
+    using BarSharedMemory = UnBARableAINS::memory::BarSharedMemory;
+
+    /// \brief Type alias for UnitData.
     using UnitData = UnBARableAINS::unit::UnitData;
 
-  private:
-    void finishEpisode(UnBARableAINS::EngineStatus status, const std::string& reason);
-    void writeObservationToSharedMemory();
-    void writeUnitToSharedMemory(springai::Unit *unit);
+    /// \brief Type alias for Action.
+    using Action = UnBARableAINS::Action;
 
-    UnitData getUnitData(springai::Unit *unit);
+    /// \brief Type alias for ActionOpt.
+    using ActionOpt = BarSharedMemory::ActionOpt;
+
+    // \brief Type alias for ActionId.
+    using ActionId = UnBARableAINS::ActionId;
+
+    /// \brief Type alias for EngineStatus.
+    using EngineStatus = UnBARableAINS::EngineStatus;
+
+    /**
+     * \brief Returns the name for the shared-memory read from the environment
+     * variable "UNBARABLEAI_SHM_NAME".
+     * \throws std::runtime_error if the environment variable is not set.
+     */
+    static std::string getShmName(void);
+
+    /**
+     * \brief Opens the shared-memory specified by \ref getShmName.
+     * \throws std::runtime_error if opening the shared-memory fails for
+     * whatever reason (like missing shm-name, the shm not actually existing,
+     * ...).
+     */
+    static BarSharedMemory openShm(void);
+
+    /**
+     * \brief Helper method updating the status and logging an optional reason.
+     * \param status New EngineStatus.
+     * \param reason Optional reason, otherwise logs "Not specified".
+     *
+     * Catches errors while updating the engine status and logs them.
+     */
+    void updateEngineStatus(
+        const EngineStatus status,
+        const std::optional<std::string_view> reason = std::nullopt);
+
+    /**
+     * \brief Implementation for the topic "EVENT_INIT".
+     * \param data Data passed to \ref HandleEvent.
+     *
+     * Calls \ref loadConfiguration and sets the EngineStatus to running.
+     */
+    void eventInit(const void *data);
+
+    /**
+     * \brief Implementation for the topic "EVENT_UNIT_CREATED".
+     * \param data Data passed to \ref HandleEvent.
+     *
+     * Simply registers a unit using \ref registerUnit.
+     */
+    void eventUnitCreated(const void *data);
+
+    /**
+     * \brief Implementation for the topic "EVENT_UNIT_DESTROYED".
+     * \param data Data passed to \ref HandleEvent.
+     *
+     * Removes unit mapping if the destroyed unit was registered.
+     */
+    void eventUnitDestroyed(const void *data);
+
+    /**
+     * \brief Implementation for the topic "EVENT_UNIT_DESTROYED".
+     * \param data Data passed to \ref HandleEvent.
+     *
+     * This method currently only handles messages starting with the prefix
+     * "UNBARABLE_GAME_OVER". Such a message must contain either ";result=win"
+     * or ";result=loss". It finishes the game/episode appropriately by calling
+     * \ref finishEpisode.
+     */
+    void eventLuaMessage(const void *data);
+
+    /**
+     * \brief Implementation for the topic "EVENT_RELEASE".
+     * \param data Data passed to \ref HandleEvent.
+     *
+     * EVENT_RELEASE is issued when the AI is to clean itself up. If the game is
+     * not yet over, it finishes the episode with a call to \ref finishEpisode
+     * with the status EngineStatus::TEAM_DIED. In either case it then clears
+     * its mapping from engine to custom id and vice versa.
+     */
+    void eventRelease(const void *data);
+
+    /**
+     * \brief Implementation for the topic "EVENT_UPDATE".
+     * \param data Data passed to \ref HandleEvent.
+     *
+     * Updates if frame >= firstUpdateFrame_ and in the interval specified by
+     * updateIntervalFrames_.
+     *
+     * An update consists of:
+     * 1. Writing the observation to the shared-memory.
+     * 2. Waiting max. 30s for a response from the python side.
+     * 3. Executing the actions.
+     */
+    void eventUpdate(const void *data);
+
+    /**
+     * \brief Method to execute a specific action.
+     * \param action Action to execute.
+     */
+    void executeAction(const Action &action);
+
+    /**
+     * \brief Attacks a target unit.
+     * \param unit Our unit.
+     * \param unitId Custom id for \p unit.
+     * \param targetTeamId \todo I am uncertain whether this is correct, I guess
+     * it should be the target team but we are kinda passing our own teamId.
+     * \param targetUnitId Custom id for the target unit.
+     */
+    void executeActionAttack(springai::Unit *unit, const uint32_t unitId,
+                             const uint32_t targetTeamId,
+                             const uint32_t targetUnitId);
+
+    /**
+     * \brief Executes any move action, i.e. up, right, down or left.
+     * \param unit Our unit.
+     * \param unitId Custom id for \p unit.
+     * \param moveAction Type of move action.
+     *
+     * Does not throw if called with another action but issues a critcal
+     * warning. This should never happen!
+     */
+    void executeActionMove(springai::Unit *unit, const uint32_t unitId,
+                           const ActionId moveAction);
+
+    /**
+     * \brief Finishes an episode by writing one last observation and
+     * waiting for a HandleEventUpdate.
+     * \param status New status of the engine, written to shared-memory.
+     * \param reason Reason to print for why/how the episode finished.
+     *
+     * Writes the last observation and then sets gameOver_. Waits 30s for
+     * the HandleEventUpdate response. The method ignores calls to it after
+     * gameOver_ has been set already.
+     */
+    void finishEpisode(const UnBARableAINS::EngineStatus status,
+                       const std::string &reason);
+
+    /**
+     * \brief Updates the observation in the shared-memory.
+     *
+     * This method does register new units, however if there is not enough
+     * capacity allocated in the shared-memory it will not be written.
+     * \see updateUnit.
+     */
+    void updateObservation(void);
+
+    /**
+     * \brief Update a unit in the shared-memory.
+     * \param unit Engine unit to update.
+     * \returns Whether the unit was actually written or not.
+     *
+     * This method registers a unit if it is new, however if no segment is
+     * available via BarSharedMemory::getEmptyUnitSlot, it does nothing.
+     */
+    bool updateUnit(springai::Unit *unit);
+
+    /**
+     * \brief Construct UnitData for a \p unit.
+     * \param unit Engine unit.
+     * \returns UnitData or std::nullopt if \ref registerUnit returns
+     * std::nullopt as well.
+     */
+    std::optional<UnitData> getUnitData(springai::Unit *unit);
 
     /// \brief Hexdumps the \ref c_shm_name to a logfile (see \ref
     /// getSharedMemoryStateFilename).
@@ -52,27 +234,42 @@ class UnBARableAI {
      * \brief Registers a unit if not present, otherwise returns already
      * registered id.
      * \param engineUnitId Unit assigned by the engine.
-     * \returns Mapped id.
+     * \returns Mapped id or std::nullopt if not registrable.
+     *
+     * Registration fails if the shared-memory does not have an empty
+     * UnitDataOpt available.
      */
-    int registerUnit(int engineUnitId);
-    int getCustomUnitId(int engineUnitId) const;
-    int getEngineUnitId(int customUnitId) const;
+    std::optional<uint32_t> registerUnit(const int engineUnitId);
 
-    void loadConfiguration();
+    /**
+     * \brief Get the custom unit id from an engine id.
+     * \param engineUnitId Id assigned to the unit by the engine.
+     * \returns Custom id assigned by the shared-memory, std::nullopt if not
+     * registered.
+     */
+    std::optional<uint32_t> getCustomUnitId(int engineUnitId) const;
+
+    /**
+     * \brief Get the engine unit id from a custom id.
+     * \param customUnitId Id assigend by the shared-memory.
+     * \returns Engine unit id, std::nullopt if not registered.
+     */
+    std::optional<int> getEngineUnitId(uint32_t customUnitId) const;
+
+    void loadConfiguration(void);
 
     springai::OOAICallback *callback_;
     int teamId_;
     bool comInUse_ = true;
-    std::string shmName_;
+    BarSharedMemory shm_;
 
     // Engine Unit ID -> eigene fortlaufende Unit ID
-    std::unordered_map<int, int> engineToCustomUnitId_;
+    std::unordered_map<int, uint32_t> engineToCustomUnitId_;
 
     // Eigene Unit ID -> Engine Unit ID
-    std::unordered_map<int, int> customToEngineUnitId_;
+    std::unordered_map<uint32_t, int> customToEngineUnitId_;
 
     bool gameOver_ = false;
-    int nextCustomUnitId_ = 0;
     int currentFrame_ = -1;
     int updateIntervalFrames_ = 2;
     int firstUpdateFrame_ = 2;
