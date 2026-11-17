@@ -139,7 +139,6 @@ void UnBARableAI::eventInit(const void *data) {
     SPDLOG_LOGGER_INFO(logger,
                        "Received INIT event: team_id={}, shared_memory=\"{}\"",
                        teamId_, shm_.getName());
-    updateEngineStatus(EngineStatus::RUNNING);
 }
 
 void UnBARableAI::eventUnitCreated(const void *data) {
@@ -232,9 +231,9 @@ void UnBARableAI::eventLuaMessage(const void *data) {
                        won ? "win" : "loss", currentFrame_, message);
 
     if (won) {
-        finishEpisode(UnBARableAINS::EngineStatus::GAME_ENDED, message);
+        finishEpisode(UnBARableAINS::EngineStatus::GAME_WON, message);
     } else {
-        finishEpisode(UnBARableAINS::EngineStatus::TEAM_DIED, message);
+        finishEpisode(UnBARableAINS::EngineStatus::GAME_LOST, message);
     }
 }
 
@@ -256,7 +255,7 @@ void UnBARableAI::eventRelease(const void *data) {
                            "Release reason={}",
                            currentFrame_, releaseReason);
 
-        finishEpisode(UnBARableAINS::EngineStatus::TEAM_DIED,
+        finishEpisode(UnBARableAINS::EngineStatus::GAME_LOST,
                       "release_fallback"
                       ";frame=" +
                           std::to_string(currentFrame_) +
@@ -296,17 +295,7 @@ void UnBARableAI::eventUpdate(const void *data) {
 
         updateObservation();
 
-        // Call python side
-        const auto connection = shm_.getGrpcConnection();
-        UnBARableAIClient client = UnBARableAIClient(connection);
-        if (!client.HandleEventUpdate(30000)) {
-            SPDLOG_LOGGER_ERROR(logger, "Frame {} event update failed: {}",
-                                currentFrame_, client.GetLastError());
-        } else {
-            SPDLOG_LOGGER_DEBUG(logger,
-                                "Frame {} event update sent successfully",
-                                currentFrame_);
-        }
+        waitForPython();
 
         const auto actions = shm_.readAll<ActionOpt>();
 
@@ -324,6 +313,38 @@ void UnBARableAI::eventUpdate(const void *data) {
         }
     }
     SPDLOG_LOGGER_DEBUG(logger, "Finished update for frame {}", currentFrame_);
+}
+
+void UnBARableAI::waitForPython(void) {
+    bool isFirstFrame = currentFrame_ == firstUpdateFrame_;
+
+    const auto connection = shm_.getGrpcConnection();
+    UnBARableAIClient client = UnBARableAIClient(connection);
+
+    if (isFirstFrame) {
+        updateEngineStatus(EngineStatus::READY);
+        SPDLOG_LOGGER_INFO(logger,
+                           "Engine is now reloaded and ready for a game, "
+                           "waiting for first ack_update.");
+        if (!client.HandleEventUpdate(UnBARableAIClient::c_infinite_timeout)) {
+            SPDLOG_LOGGER_CRITICAL(
+                logger,
+                "First frame event update should not be possible to fail.");
+        } else {
+            SPDLOG_LOGGER_DEBUG(logger,
+                                "First frame event update sent successfully.");
+        }
+        updateEngineStatus(EngineStatus::RUNNING);
+    } else {
+        if (!client.HandleEventUpdate(c_grpc_timeout_ms)) {
+            SPDLOG_LOGGER_ERROR(logger, "Frame {} event update failed: {}.",
+                                currentFrame_, client.GetLastError());
+        } else {
+            SPDLOG_LOGGER_DEBUG(logger,
+                                "Frame {} event update sent successfully.",
+                                currentFrame_);
+        }
+    }
 }
 
 void UnBARableAI::executeAction(const Action &action) {
@@ -465,7 +486,7 @@ void UnBARableAI::finishEpisode(const UnBARableAINS::EngineStatus status,
     const auto connection = shm_.getGrpcConnection();
     UnBARableAIClient client = UnBARableAIClient(connection);
 
-    if (!client.HandleEventUpdate(30000)) {
+    if (!client.HandleEventUpdate(c_grpc_timeout_ms)) {
         SPDLOG_LOGGER_ERROR(logger,
                             "Failed to send terminal event update: "
                             "frame={}, status={}, reason=\"{}\", error={}",
