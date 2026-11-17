@@ -71,7 +71,7 @@ class UnBARableAI {
      * variable "UNBARABLEAI_SHM_NAME".
      * \throws std::runtime_error if the environment variable is not set.
      */
-    static std::string getShmName(void);
+    static std::string getShmName(int teamId);
 
     /**
      * \brief Opens the shared-memory specified by \ref getShmName.
@@ -79,7 +79,7 @@ class UnBARableAI {
      * whatever reason (like missing shm-name, the shm not actually existing,
      * ...).
      */
-    static BarSharedMemory openShm(void);
+    static BarSharedMemory openShm(int teamId);
 
     /**
      * \brief Helper method updating the status and logging an optional reason.

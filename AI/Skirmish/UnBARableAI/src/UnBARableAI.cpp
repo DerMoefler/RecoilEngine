@@ -37,9 +37,10 @@ struct ConfigureLogger {
 ConfigureLogger configureLogger;
 } // namespace
 
-UnBARableAI::UnBARableAI(springai::OOAICallback *callback)
-    : callback_(callback), shm_(openShm()) {
-    teamId_ = callback_->GetSkirmishAIId();
+UnBARableAI::UnBARableAI(springai::OOAICallback *callback):
+    callback_(callback),
+    teamId_(callback_->GetSkirmishAIId()),
+    shm_(openShm(teamId_)) {
     srand(time(NULL));
 }
 
@@ -78,31 +79,73 @@ void UnBARableAI::HandleEvent(int topic, const void *data) {
     }
 }
 
-std::string UnBARableAI::getShmName(void) {
-    const char *const value = std::getenv("UNBARABLEAI_SHM_NAME");
+std::string UnBARableAI::getShmName(
+    const int teamId
+) {
+    const std::string variableName =
+        "UNBARABLEAI_SHM_NAME_"
+        + std::to_string(teamId);
+
+    const char *const value =
+        std::getenv(variableName.c_str());
 
     if (value == nullptr || *value == '\0') {
         const std::string message =
-            "UNBARABLEAI_SHM_NAME environment variable is not set,";
-        SPDLOG_LOGGER_ERROR(logger, message);
-        throw std::runtime_error(message);
+            variableName
+            + " environment variable is not set";
+
+        SPDLOG_LOGGER_ERROR(
+            logger,
+            "{}",
+            message
+        );
+
+        throw std::runtime_error(
+            message
+        );
     }
 
     return std::string{value};
 }
 
-auto UnBARableAI::openShm(void) -> BarSharedMemory {
-    const auto shmName = getShmName();
+auto UnBARableAI::openShm(
+    const int teamId
+) -> BarSharedMemory {
+    const auto shmName =
+        getShmName(teamId);
+
     try {
-        auto shm = BarSharedMemory::open(shmName);
-        SPDLOG_LOGGER_INFO(logger, "Opened SharedMemory \"{}\"", shmName);
+        auto shm =
+            BarSharedMemory::open(shmName);
+
+        SPDLOG_LOGGER_INFO(
+            logger,
+            "Opened SharedMemory \"{}\" "
+            "for team_id={}",
+            shmName,
+            teamId
+        );
+
         return shm;
     } catch (const std::exception &e) {
         const std::string message =
-            std::format("Failed opening SharedMemory \"{}\". Reason: {}",
-                        shmName, e.what());
-        SPDLOG_LOGGER_ERROR(logger, message);
-        throw std::runtime_error(message);
+            std::format(
+                "Failed opening SharedMemory \"{}\" "
+                "for team_id={}. Reason: {}",
+                shmName,
+                teamId,
+                e.what()
+            );
+
+        SPDLOG_LOGGER_ERROR(
+            logger,
+            "{}",
+            message
+        );
+
+        throw std::runtime_error(
+            message
+        );
     }
 }
 
