@@ -508,9 +508,15 @@ void UnBARableAI::updateObservation(void) {
         callback_->GetEnemyUnitsInRadarAndLos();
     std::vector<springai::Unit *> neutralUnits = callback_->GetNeutralUnits();
 
-    // Lambda to write the three unit types.
+    // Lambda to write the three unit types (discards dead units or nullptr).
     auto updateUnits = [&](std::vector<springai::Unit *> units,
                            const std::string_view name) -> std::size_t {
+        // Erase dead units before
+        auto isDead = [](springai::Unit *unit) {
+            return unit == nullptr || unit->GetHealth() <= 0.0f;
+        };
+        std::erase_if(units, isDead);
+
         std::size_t failed{0};
         const std::size_t totalNumUnits = units.size();
         for (springai::Unit *unit : units) {
