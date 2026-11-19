@@ -193,6 +193,11 @@ void UnBARableAI::eventUnitDestroyed(const void *data) {
         SPDLOG_LOGGER_DEBUG(
             logger, "Removed unit mapping: engine ID {} -> custom ID {}",
             engineUnitId, customUnitIdOpt.value());
+        shm_.updateUnitData(customUnitIdOpt.value(), std::nullopt);
+        SPDLOG_LOGGER_DEBUG(
+            logger,
+            "UnitDataOpt with serializable ID {} has been set to std::nullopt",
+            customUnitIdOpt.value());
     }
 }
 
