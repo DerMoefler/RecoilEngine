@@ -67,6 +67,13 @@ class UnBARableAI {
     using EngineStatus = UnBARableAINS::EngineStatus;
 
     /**
+     * \brief Timeout for a gGRPC call in ms.
+     *
+     * \see waitForPython for details.
+     */
+    static constexpr int c_grpc_timeout_ms = 30000;
+
+    /**
      * \brief Returns the name for the shared-memory read from the environment
      * variable "UNBARABLEAI_SHM_NAME".
      * \throws std::runtime_error if the environment variable is not set.
@@ -151,6 +158,17 @@ class UnBARableAI {
      * 3. Executing the actions.
      */
     void eventUpdate(const void *data);
+
+    /**
+     * \brief Simple helper function to wait for the python side.
+     *
+     * Waits indefinetely if the currentFrame_ == firstUpdateFrame_ which is
+     * done so an engine can have a fully loaded gamestate and be used for an
+     * episode anytime (EnginePool). It also updates the state to be
+     * EngineStatus::READY before and to EngineStatus::RUNNING after that first
+     * frame.
+     */
+    void waitForPython(void);
 
     /**
      * \brief Method to execute a specific action.
