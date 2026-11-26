@@ -201,17 +201,43 @@ void UnBARableAI::eventUnitDestroyed(const void *data) {
 
     // Remove mapping if unit was registered
     if (customUnitIdOpt.has_value()) {
-        engineToCustomUnitId_.erase(engineUnitId);
-        customToEngineUnitId_.erase(customUnitIdOpt.value());
+        const auto unitId = customUnitIdOpt.value();
+        // Write unit one last time if the game has already started, i.e. frame
+        // >= firstUpdateFrame_
+        if (unit && currentFrame_ >= firstUpdateFrame_) {
+            const auto unitDataOpt = getUnitData(unit);
+            if (!unitDataOpt.has_value()) {
+                SPDLOG_LOGGER_ERROR(logger, "Cannot get unit data for.");
+            } else {
+                const auto unitData = unitDataOpt.value();
+                shm_.updateUnitData(unitId, unitData);
+                SPDLOG_LOGGER_DEBUG(logger,
+                                    "UnitData with Serializable ID {} has "
+                                    "been written on destruction.",
+                                    unitId);
+                if (!unitData.is_dead) {
+                    SPDLOG_LOGGER_ERROR(
+                        logger,
+                        "UnitData.is_dead is not 'True' even though the unit "
+                        "has been destroyed.");
+                }
+            }
+        } else {
+            shm_.updateUnitData(unitId, std::nullopt);
+            SPDLOG_LOGGER_DEBUG(
+                logger,
+                "Game has not actually started yet, meaning the unit "
+                "has been destroyed as part of the startscript. Therefore, the "
+                "UnitData with Serializable ID {} has been set to "
+                "std::nullopt, i.e. freed.",
+                unitId);
+        }
 
+        engineToCustomUnitId_.erase(engineUnitId);
+        customToEngineUnitId_.erase(unitId);
         SPDLOG_LOGGER_DEBUG(
             logger, "Removed unit mapping: engine ID {} -> custom ID {}",
-            engineUnitId, customUnitIdOpt.value());
-        shm_.updateUnitData(customUnitIdOpt.value(), std::nullopt);
-        SPDLOG_LOGGER_DEBUG(
-            logger,
-            "UnitDataOpt with serializable ID {} has been set to std::nullopt",
-            customUnitIdOpt.value());
+            engineUnitId, unitId);
     }
 }
 
