@@ -103,7 +103,11 @@ class UnBARableAI {
      * \brief Implementation for the topic "EVENT_INIT".
      * \param data Data passed to \ref HandleEvent.
      *
-     * Calls \ref loadConfiguration and sets the EngineStatus to running.
+     * Calls \ref loadConfiguration and sets the EngineStatus to running. Also
+     * resets the Units and Actions in the shared-memory. This is necessary
+     * because at the end of an episode, the engine is expected to write a
+     * terminal state. That state is still left at the start of the next episode
+     * though, thus requiring to clear it.
      */
     void eventInit(const void *data);
 

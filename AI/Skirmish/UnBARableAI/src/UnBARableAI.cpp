@@ -153,6 +153,8 @@ void UnBARableAI::eventInit(const void *data) {
     SPDLOG_LOGGER_INFO(logger,
                        "Received INIT event: team_id={}, shared_memory=\"{}\"",
                        teamId_, shm_.getName());
+    shm_.clearUnitsAndActions();
+    SPDLOG_LOGGER_INFO(logger, "Reset units and actions in the shared-memory.");
 }
 
 void UnBARableAI::eventUnitCreated(const void *data) {
