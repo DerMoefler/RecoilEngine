@@ -227,6 +227,13 @@ cd /build/cpp
 # CC und CXX sind bereits auf GCC 13 gesetzt.
 conan profile detect --force
 
+# Pin CMake version
+cat >> "$CONAN_HOME/profiles/default" <<'EOF'
+ 
+[tool_requires]
+*: cmake/4.4.4
+EOF
+
 conan install . \
   --output-folder=/build/out/cpp/Release \
   --build=missing \
